@@ -246,9 +246,13 @@ def collect_data():
                             )
                             
                             if call_result:
-                                call_filename = f"{company_name}_CALL_{start_date}_{end_date}.xlsx"
-                                task_status[task_id]["files"].append(call_filename)
-                                task_status[task_id]["log"].append(f"✅ CALL 파일 수집 완료: {call_filename}")
+                                # 실제 다운로드된 CALL 파일 찾기
+                                download_dir = str(Path.home() / "Downloads")
+                                xlsx_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
+                                latest_call_file = max(xlsx_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                                
+                                task_status[task_id]["files"].append(latest_call_file)
+                                task_status[task_id]["log"].append(f"✅ CALL 파일 수집 완료: {latest_call_file}")
                             else:
                                 task_status[task_id]["log"].append("⚠️ CALL 데이터 수집 실패 또는 데이터 없음")
                             
@@ -311,13 +315,15 @@ def get_task_status(task_id):
 
 @app.route('/api/upload-file', methods=['POST'])
 def upload_file():
-    """파일 업로드"""
+    """파일 업로드 (다중 파일 지원)"""
     try:
         if 'file' not in request.files:
             return jsonify({"error": "파일이 없습니다"}), 400
         
         file = request.files['file']
         company_name = request.form.get('company_name')
+        file_index = request.form.get('file_index', '0')
+        file_label = request.form.get('file_label', '')
         
         if file.filename == '':
             return jsonify({"error": "파일명이 없습니다"}), 400
@@ -326,17 +332,90 @@ def upload_file():
         upload_dir = "uploads"
         os.makedirs(upload_dir, exist_ok=True)
         
-        # 파일 저장
-        filename = f"{company_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+        # 파일 저장 (파일 인덱스와 라벨 포함)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{company_name}_{file_label}_{timestamp}_{file.filename}"
         filepath = os.path.join(upload_dir, filename)
         file.save(filepath)
         
-        print(f"📁 파일 업로드: {filename}")
+        print(f"📁 파일 업로드: {filename} (인덱스: {file_index}, 라벨: {file_label})")
         
-        return jsonify({"filename": filename, "message": "업로드 완료"})
+        return jsonify({
+            "filename": filename, 
+            "file_index": int(file_index),
+            "file_label": file_label,
+            "message": "업로드 완료"
+        })
         
     except Exception as e:
         print(f"❌ 업로드 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/auto-upload-collected', methods=['POST'])
+def auto_upload_collected():
+    """수집된 파일을 업로드 영역으로 자동 복사"""
+    try:
+        data = request.get_json()
+        company_name = data.get('company_name')
+        collected_filename = data.get('collected_filename')
+        file_index = data.get('file_index', 0)
+        file_label = data.get('file_label', '')
+        
+        print(f"🔄 자동 업로드: {company_name} - {collected_filename} ({file_label})")
+        
+        # 수집된 파일 찾기
+        from pathlib import Path
+        import glob
+        import shutil
+        
+        possible_paths = [
+            str(Path.home() / "Downloads"),
+            str(Path.home() / "다운로드"),
+            "./downloads"
+        ]
+        
+        source_filepath = None
+        for download_dir in possible_paths:
+            if os.path.exists(download_dir):
+                # 정확한 파일명 먼저 찾기
+                test_path = os.path.join(download_dir, collected_filename)
+                if os.path.exists(test_path):
+                    source_filepath = test_path
+                    break
+                    
+                # 유사한 파일명 찾기
+                pattern = os.path.join(download_dir, f"*{collected_filename.split('_')[0]}*.xlsx")
+                matches = glob.glob(pattern)
+                if matches:
+                    source_filepath = max(matches, key=os.path.getctime)
+                    break
+        
+        if not source_filepath or not os.path.exists(source_filepath):
+            return jsonify({"error": f"수집된 파일을 찾을 수 없습니다: {collected_filename}"}), 404
+        
+        # 업로드 폴더에 복사
+        upload_dir = "uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        uploaded_filename = f"{company_name}_{file_label}_{timestamp}_{collected_filename}"
+        upload_filepath = os.path.join(upload_dir, uploaded_filename)
+        
+        # 파일 복사
+        shutil.copy2(source_filepath, upload_filepath)
+        
+        print(f"✅ 자동 업로드 완료: {uploaded_filename}")
+        
+        return jsonify({
+            "uploaded_filename": uploaded_filename,
+            "original_filename": collected_filename,
+            "file_index": file_index,
+            "file_label": file_label,
+            "message": "자동 업로드 완료"
+        })
+        
+    except Exception as e:
+        print(f"❌ 자동 업로드 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/process-file', methods=['POST'])
