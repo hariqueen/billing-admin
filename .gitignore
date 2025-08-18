@@ -1,0 +1,59 @@
+# OS/에디터
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 환경변수/비밀
+.env
+.env.*
+*.pem
+*.key
+*-firebase-adminsdk-*.json
+*-rtdb-export.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+ENV/
+env/
+.buildozer/
+
+# Node/Frontend
+node_modules/
+frontend/node_modules/
+frontend/.parcel-cache/
+frontend/.next/
+frontend/dist/
+frontend/build/
+coverage/
+
+# 산출물/대용량
+build/
+dist/
+downloads/
+*.log
+nohup.out
+
+# 데이터/업로드(백엔드 업로드 폴더)
+backend/uploads/
+
+# 패키징/배포 산출물
+*.egg-info/
+.eggs/
+*.egg
+lib/
+lib64/
+parts/
+sdist/
+var/
+
+# 문서/시트/파일
+*.csv
+*.xlsx
+*.xls
+*.gsheet
