@@ -194,23 +194,23 @@ const BillingAutomationAdmin = () => {
         const fileLabel = company.fileLabels[i];
         
         try {
-          const response = await fetch('http://localhost:5001/api/auto-upload-collected', {
+          // 기존 upload-file API를 활용하여 자동 업로드
+          const formData = new FormData();
+          formData.append('company_name', companyName);
+          formData.append('collected_filename', filename);
+          formData.append('file_index', i.toString());
+          formData.append('file_label', fileLabel);
+
+          const response = await fetch('http://localhost:5001/api/upload-file', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              company_name: companyName,
-              collected_filename: filename,
-              file_index: i,
-              file_label: fileLabel
-            })
+            body: formData
           });
 
           const result = await response.json();
           
           if (response.ok) {
             uploadedFiles[i] = result.filename;
+            console.log(`✅ 자동 업로드 완료: ${filename} -> ${result.filename}`);
           }
         } catch (error) {
           console.error(`자동 업로드 오류:`, error);
@@ -514,14 +514,13 @@ const BillingAutomationAdmin = () => {
                   <div className="flex flex-col gap-1 items-center">
                     {company.collectedFiles.length > 0 ? (
                       company.collectedFiles.map((file, index) => (
-                        <button
+                        <span
                           key={index}
-                          onClick={() => handleDownload(file)}
-                          className="text-blue-600 hover:text-blue-800 text-sm underline text-center max-w-full truncate"
+                          className="text-gray-700 text-sm text-center max-w-full truncate"
                           title={file}
                         >
                           {file}
-                        </button>
+                        </span>
                       ))
                     ) : (
                       <span className="text-gray-400 text-sm">-</span>
