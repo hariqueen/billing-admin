@@ -12,6 +12,7 @@
 *.key
 *-firebase-adminsdk-*.json
 *-rtdb-export.json
+firebase-credentials.json
 
 # Python
 __pycache__/
@@ -39,8 +40,15 @@ downloads/
 *.log
 nohup.out
 
-# 데이터/업로드(백엔드 업로드 폴더)
+# 데이터/업로드 폴더
+uploads/
 backend/uploads/
+
+# 임시 파일/폴더
+temp/
+tmp/
+*.tmp
+*.temp
 
 # 패키징/배포 산출물
 *.egg-info/
@@ -57,3 +65,21 @@ var/
 *.xlsx
 *.xls
 *.gsheet
+
+# 크롬드라이버/셀레니움
+chromedriver*
+geckodriver*
+*.exe
+
+# 로그 파일
+logs/
+*.log.*
+
+# 백업 파일
+*.bak
+*.backup
+*~
+
+# 캐시 파일
+.cache/
+*.cache

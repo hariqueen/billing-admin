@@ -1,4 +1,0 @@
-Flask
-Flask-CORS
-selenium
-firebase-admin

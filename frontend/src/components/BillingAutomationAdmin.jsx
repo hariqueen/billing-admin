@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Download, Upload, Play, Loader2 } from 'lucide-react';
+import { Download, Upload, Play, Loader2, Settings } from 'lucide-react';
+import AccountManager from './AccountManager';
 
 const BillingAutomationAdmin = () => {
   const [dateRange, setDateRange] = useState({
@@ -13,6 +14,8 @@ const BillingAutomationAdmin = () => {
     files: []
   });
 
+  const [showAccountManager, setShowAccountManager] = useState(false);
+
   const [companies, setCompanies] = useState([
     {
       name: '앤하우스',
@@ -23,10 +26,10 @@ const BillingAutomationAdmin = () => {
       requiredFileCount: 2,
       fileLabels: ['SMS 데이터', 'CALL 데이터'],
       processing: false,
-      processedFile: null
+      processedFiles: []
     },
     {
-      name: '디싸이더스/애드프로젝트',
+      name: '디싸이더스/애드플젝',
       type: 'sms',
       collecting: false,
       collectedFiles: [],
@@ -34,7 +37,7 @@ const BillingAutomationAdmin = () => {
       requiredFileCount: 5,
       fileLabels: ['SMS 데이터', 'CHAT 데이터', '추가 파일 1', '추가 파일 2', '추가 파일 3'],
       processing: false,
-      processedFile: null
+      processedFiles: []
     },
     {
       name: '매스프레소(콴다)',
@@ -45,7 +48,51 @@ const BillingAutomationAdmin = () => {
       requiredFileCount: 1,
       fileLabels: ['SMS 데이터'],
       processing: false,
-      processedFile: null
+      processedFiles: []
+    },
+    {
+      name: '코오롱Fnc',
+      type: 'manual',
+      collecting: false,
+      collectedFiles: [],
+      uploadedFiles: [],
+      requiredFileCount: 2,
+      fileLabels: ['데이터 파일 1', '데이터 파일 2'],
+      processing: false,
+      processedFiles: []
+    },
+    {
+      name: 'SK일렉링크',
+      type: 'manual',
+      collecting: false,
+      collectedFiles: [],
+      uploadedFiles: [],
+      requiredFileCount: 1,
+      fileLabels: ['데이터 파일'],
+      processing: false,
+      processedFiles: []
+    },
+    {
+      name: 'W컨셉',
+      type: 'manual',
+      collecting: false,
+      collectedFiles: [],
+      uploadedFiles: [],
+      requiredFileCount: 1,
+      fileLabels: ['데이터 파일'],
+      processing: false,
+      processedFiles: []
+    },
+    {
+      name: '메디빌더',
+      type: 'manual',
+      collecting: false,
+      collectedFiles: [],
+      uploadedFiles: [],
+      requiredFileCount: 2,
+      fileLabels: ['데이터 파일 1', '데이터 파일 2'],
+      processing: false,
+      processedFiles: []
     }
   ]);
 
@@ -109,8 +156,8 @@ const BillingAutomationAdmin = () => {
               : company
           ));
           
-          // 앤하우스, 디싸이더스/애드프로젝트, 매스프레소(콴다)인 경우 수집된 파일들을 자동으로 업로드
-          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)') && status.files && status.files.length > 0) {
+          // 앤하우스, 디싸이더스/애드플젝, 매스프레소(콴다)인 경우 수집된 파일들을 자동으로 업로드
+          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드플젝' || companyName === '매스프레소(콴다)') && status.files && status.files.length > 0) {
             autoUploadCollectedFiles(companyName, status.files);
           }
         } else if (status.status === 'failed') {
@@ -138,8 +185,6 @@ const BillingAutomationAdmin = () => {
   };
 
   const autoUploadCollectedFiles = async (companyName, collectedFiles) => {
-    console.log(`🔄 ${companyName} 수집된 파일 자동 업로드 시작:`, collectedFiles);
-    
     try {
       const company = companies.find(c => c.name === companyName);
       const uploadedFiles = [];
@@ -149,7 +194,6 @@ const BillingAutomationAdmin = () => {
         const fileLabel = company.fileLabels[i];
         
         try {
-          // 수집된 파일을 백엔드에서 업로드 영역으로 복사하는 API 호출
           const response = await fetch('http://localhost:5001/api/auto-upload-collected', {
             method: 'POST',
             headers: {
@@ -166,17 +210,13 @@ const BillingAutomationAdmin = () => {
           const result = await response.json();
           
           if (response.ok) {
-            uploadedFiles[i] = result.uploaded_filename;
-            console.log(`✅ 자동 업로드 완료: ${fileLabel} -> ${result.uploaded_filename}`);
-          } else {
-            console.error(`❌ 자동 업로드 실패 (${fileLabel}):`, result.error);
+            uploadedFiles[i] = result.filename;
           }
         } catch (error) {
-          console.error(`❌ 자동 업로드 오류 (${fileLabel}):`, error);
+          console.error(`자동 업로드 오류:`, error);
         }
       }
       
-      // 상태 업데이트
       setCompanies(prev => prev.map(comp => 
         comp.name === companyName 
           ? { ...comp, uploadedFiles: uploadedFiles }
@@ -184,9 +224,11 @@ const BillingAutomationAdmin = () => {
       ));
       
     } catch (error) {
-      console.error('자동 업로드 전체 오류:', error);
+      console.error('자동 업로드 오류:', error);
     }
   };
+
+
 
   const showFilePopup = (companyName) => {
     const company = companies.find(c => c.name === companyName);
@@ -284,18 +326,49 @@ const BillingAutomationAdmin = () => {
         : comp
     ));
 
-    // 전처리 시뮬레이션
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // 실제 전처리 API 호출
+      const response = await fetch('http://localhost:5001/api/process-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_name: companyName,
+          collection_date: dateRange.startDate  // YYYY-MM-DD 형식
+        })
+      });
 
-    setCompanies(prev => prev.map(comp => 
-      comp.name === companyName 
-        ? { 
-            ...comp, 
-            processing: false, 
-            processedFile: `${companyName}_견적서_${dateRange.startDate}_${dateRange.endDate}.xlsx`
-          }
-        : comp
-    ));
+      const result = await response.json();
+      
+      if (response.ok) {
+        console.log(`✅ ${companyName} 전처리 완료:`, result);
+        
+        setCompanies(prev => prev.map(comp => 
+          comp.name === companyName 
+            ? { ...comp, processing: false, processedFiles: result.processed_files || [] }
+            : comp
+        ));
+      } else {
+        console.error(`❌ ${companyName} 전처리 실패:`, result.error);
+        alert(`전처리 실패: ${result.error}`);
+        
+        setCompanies(prev => prev.map(comp => 
+          comp.name === companyName 
+            ? { ...comp, processing: false }
+            : comp
+        ));
+      }
+    } catch (error) {
+      console.error(`❌ ${companyName} 전처리 오류:`, error);
+      alert(`전처리 중 오류가 발생했습니다: ${error.message}`);
+      
+      setCompanies(prev => prev.map(comp => 
+        comp.name === companyName 
+          ? { ...comp, processing: false }
+          : comp
+      ));
+    }
   };
 
   const handleDownload = async (filename) => {
@@ -333,6 +406,11 @@ const BillingAutomationAdmin = () => {
     }
   };
 
+  // 계정관리 화면이 활성화된 경우
+  if (showAccountManager) {
+    return <AccountManager onBack={() => setShowAccountManager(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -344,32 +422,41 @@ const BillingAutomationAdmin = () => {
 
         {/* 날짜 선택 */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-center gap-4">
-            <label className="text-sm font-medium text-gray-700">조회 기간:</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="date"
-                value={dateRange.startDate}
-                onChange={(e) => handleDateChange('startDate', e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <span className="text-gray-500 mx-2">~</span>
-              <input
-                type="date"
-                value={dateRange.endDate}
-                onChange={(e) => handleDateChange('endDate', e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">조회 기간:</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="date"
+                  value={dateRange.startDate}
+                  onChange={(e) => handleDateChange('startDate', e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="text-gray-500 mx-2">~</span>
+                <input
+                  type="date"
+                  value={dateRange.endDate}
+                  onChange={(e) => handleDateChange('endDate', e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
             </div>
+            <button
+              onClick={() => setShowAccountManager(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              계정관리
+            </button>
           </div>
         </div>
 
         {/* 컬럼 헤더 */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-4">
           <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-            {/* ICS 헤더 */}
+            {/* ISC/PJ명 헤더 */}
             <div className="col-span-2 text-center">
-              <span>ICS</span>
+              <span>ISC/PJ명</span>
             </div>
             
             {/* 수집된 파일 헤더 */}
@@ -404,11 +491,11 @@ const BillingAutomationAdmin = () => {
           {companies.map((company) => (
             <div key={company.name} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="grid grid-cols-12 gap-6 items-center">
-                {/* ICS 영역 */}
+                {/* ISC/PJ명 영역 */}
                 <div className="col-span-2 flex justify-center">
                   <button
-                    onClick={() => handleCollectData(company.name)}
-                    disabled={company.collecting}
+                    onClick={() => company.type !== 'manual' && handleCollectData(company.name)}
+                    disabled={company.collecting || company.type === 'manual'}
                     className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium min-w-[140px]"
                   >
                     {company.collecting ? (
@@ -517,15 +604,18 @@ const BillingAutomationAdmin = () => {
                 </div>
 
                 {/* 견적서 영역 */}
-                <div className="col-span-2 flex justify-center">
-                  {company.processedFile ? (
-                    <button
-                      onClick={() => handleDownload(company.processedFile)}
-                      className="text-green-600 hover:text-green-800 text-sm underline text-center max-w-full truncate"
-                      title={company.processedFile}
-                    >
-                      {company.processedFile}
-                    </button>
+                <div className="col-span-2 flex flex-col items-center gap-1">
+                  {company.processedFiles && company.processedFiles.length > 0 ? (
+                    company.processedFiles.map((filename, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleDownload(filename)}
+                        className="text-green-600 hover:text-green-800 text-sm underline text-center max-w-full truncate"
+                        title={filename}
+                      >
+                        {filename}
+                      </button>
+                    ))
                   ) : (
                     <span className="text-gray-400 text-sm">-</span>
                   )}
@@ -545,7 +635,7 @@ const BillingAutomationAdmin = () => {
               const minRequired = c.name === '디싸이더스/애드프로젝트' ? 2 : c.requiredFileCount;
               return uploadedCount >= minRequired;
             }).length}/{companies.length}개 고객사</p>
-            <p>• 전처리 완료: {companies.filter(c => c.processedFile).length}/{companies.length}개 고객사</p>
+            <p>• 전처리 완료: {companies.filter(c => c.processedFiles && c.processedFiles.length > 0).length}/{companies.length}개 고객사</p>
           </div>
         </div>
 

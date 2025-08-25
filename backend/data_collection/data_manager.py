@@ -5,7 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 import time
 import os
-from config import ElementConfig, DateConfig
+from backend.data_collection.config import ElementConfig, DateConfig
 
 class DataManager:
     """데이터 수집 설정 및 다운로드 관리 클래스"""
@@ -14,7 +14,7 @@ class DataManager:
         self.login_manager = login_manager
     
     def setup_call_data_collection(self, company_name, start_date=None, end_date=None, download=False):
-        """CALL 계정 데이터 수집 설정 및 다운로드"""
+        """CALL 계정 데이터 수집 설정 및 다운로드 (빠른 재시도 로직 포함)"""
         session = self.login_manager.get_active_session(company_name, "call")
         if not session:
             print(f"{company_name} CALL 세션이 없습니다")
@@ -26,31 +26,59 @@ class DataManager:
         
         print(f"{company_name} 데이터 수집 설정 시작")
         
+        def retry_click(selector, selector_type="css", max_retries=3):
+            """클릭 재시도 함수"""
+            for attempt in range(max_retries):
+                try:
+                    # 로딩 마스크 대기
+                    self._wait_for_masks(driver, timeout=2)
+                    
+                    if selector_type == "xpath":
+                        element = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
+                    else:
+                        element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
+                    
+                    # JavaScript로 클릭 시도
+                    driver.execute_script("arguments[0].click();", element)
+                    time.sleep(0.5)
+                    return True
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        raise e
+        
         try:
-            # 회사 선택
+            # 회사 선택 (재시도)
             company_text = config.get('company_text', company_name)
-            wait.until(EC.element_to_be_clickable((By.XPATH, f"//span[contains(text(), '{company_text}')]"))).click()
+            retry_click(f"//span[contains(text(), '{company_text}')]", "xpath")
             time.sleep(1)
             
-            # 콜데이터 선택
-            wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), '콜데이터')]"))).click()
+            # 콜데이터 선택 (재시도)
+            retry_click("//span[contains(text(), '콜데이터')]", "xpath")
             time.sleep(1)
             
-            # 아웃바운드 설정
+            # 아웃바운드 설정 (재시도)
             outbound_selector = config.get('outbound_selector', "#uxtagfield-2171-inputEl")
-            element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, outbound_selector)))
-            element.click()
+            retry_click(outbound_selector)
             time.sleep(0.3)
+            
+            # 아웃바운드 값 선택
+            element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, outbound_selector)))
             element.send_keys(Keys.ARROW_DOWN, Keys.ENTER)
             
-            # 호상태 설정
+            # 호상태 설정 (재시도)
             call_status_selector = config.get('call_status_selector', "#uxtagfield-2172-inputEl")
             driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
             time.sleep(0.5)
+            
+            retry_click(call_status_selector)
+            time.sleep(0.5)
+            
+            # 호상태 값 선택
             element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, call_status_selector)))
             actions = ActionChains(driver)
-            actions.move_to_element(element).click().perform()
-            time.sleep(0.5)
             for _ in range(17):
                 actions.send_keys(Keys.ARROW_DOWN).perform()
                 time.sleep(0.05)
@@ -67,14 +95,13 @@ class DataManager:
                 end_input.clear()
                 end_input.send_keys(end_date)
             
-            # 검색 실행
-            wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['search_btn_selector']))).click()
+            # 검색 실행 (재시도)
+            retry_click(config['search_btn_selector'])
             time.sleep(2)
             
-            # 다운로드 시도
+            # 다운로드 시도 (재시도)
             if download:
-                # 엑셀 다운로드 버튼 클릭
-                wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['download_btn_selector']))).click()
+                retry_click(config['download_btn_selector'])
                 time.sleep(1)
                 
                 # 데이터 없음 체크
@@ -91,6 +118,18 @@ class DataManager:
                 # 데이터가 있는 경우 다운로드 진행
                 print("✅ 다운로드 시작")
                 time.sleep(3)
+                
+                # 다운로드 완료 후 파일 확인
+                try:
+                    from pathlib import Path
+                    import os
+                    download_dir = str(Path.home() / "Downloads")
+                    excel_files = [f for f in os.listdir(download_dir) if f.endswith(('.xlsx', '.xls'))]
+                    if excel_files:
+                        latest_file = max(excel_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                        print(f"다운로드 완료: {latest_file}")
+                except Exception as e:
+                    print(f"파일 확인 중 오류: {e}")
             
             print(f"{company_name} 데이터 수집 완료")
             return True
@@ -132,19 +171,13 @@ class DataManager:
         if timeout is None:
             timeout = ElementConfig.WAIT['default']
             
-        print("🔍 마스크 확인 중...")
         masks = driver.find_elements(By.CSS_SELECTOR, ElementConfig.COMMON['loading_mask'])
         if masks:
-            print(f"⚠️ 마스크 발견: {len(masks)}개")
             for mask in masks:
                 if mask.is_displayed():
-                    print("마스크가 표시된 상태입니다. 대기 시작...")
                     WebDriverWait(driver, timeout).until(
                         EC.invisibility_of_element(mask)
                     )
-            print("✅ 모든 마스크가 사라짐")
-        else:
-            print("✅ 마스크 없음")
     
     def _click_element(self, driver, element, js_click=True):
         """엘리먼트 클릭 (JavaScript 또는 일반)"""
