@@ -3,11 +3,62 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from openpyxl.styles import PatternFill, Border, Side
+from openpyxl import load_workbook
 import re
+import shutil
+import firebase_admin
+from firebase_admin import credentials, storage
 
 class KolonPreprocessor:
     def __init__(self):
         self.download_dir = str(Path.home() / "Downloads")
+        self.bucket = None
+        self.setup_firebase()
+    
+    def setup_firebase(self):
+        """Firebase Storage 연결 설정"""
+        try:
+            import json
+            from dotenv import load_dotenv
+            
+            load_dotenv()
+            cred_dict = json.loads(os.environ["FIREBASE_PRIVATE_KEY"])
+            
+            BUCKET_NAME = os.getenv("STORAGE_BUCKET", "services-e42af.firebasestorage.app")
+            
+            # 기존 앱이 있으면 삭제하고 새로 초기화
+            if firebase_admin._apps:
+                firebase_admin.delete_app(firebase_admin.get_app())
+            
+            firebase_admin.initialize_app(
+                credentials.Certificate(cred_dict),
+                {"storageBucket": BUCKET_NAME}
+            )
+            
+            self.bucket = storage.bucket()
+            print("✅ Firebase Storage 연결 완료")
+        except Exception as e:
+            print(f"❌ Firebase 연결 실패: {e}")
+            self.bucket = None
+    
+    def download_kolon_template(self):
+        """Firebase에서 kolon.xlsx 템플릿 다운로드"""
+        if not self.bucket:
+            print("❌ Firebase 연결이 없습니다")
+            return None
+        
+        try:
+            blob = self.bucket.blob("kolon.xlsx")
+            temp_dir = os.path.join(os.getcwd(), "temp_templates")
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            local_path = os.path.join(temp_dir, "kolon.xlsx")
+            blob.download_to_filename(local_path)
+            print(f"✅ kolon.xlsx 템플릿 다운로드 완료: {local_path}")
+            return local_path
+        except Exception as e:
+            print(f"❌ kolon.xlsx 템플릿 다운로드 실패: {e}")
+            return None
         
     def convert_xls_to_csv(self, xls_file_path):
         """XLS/XLSX/CSV 파일을 CSV로 변환 또는 확인"""
@@ -298,6 +349,145 @@ class KolonPreprocessor:
         except Exception as e:
             print(f"❌ Excel 파일 저장 실패: {e}")
             return False
+    
+    def extract_amount_from_summary(self, excel_path):
+        """코오롱_청구내역서 Excel 파일의 요약 시트 D3 셀에서 금액 추출"""
+        try:
+            workbook = load_workbook(excel_path)
+            if '요약' in workbook.sheetnames:
+                summary_sheet = workbook['요약']
+                amount_cell = summary_sheet.cell(row=3, column=4)  # D3 셀
+                amount = amount_cell.value
+                
+                if amount and isinstance(amount, (int, float)):
+                    print(f"✅ 요약 시트 D3 셀에서 금액 추출: {amount:,}원")
+                    return float(amount)
+                else:
+                    print(f"❌ D3 셀에서 유효한 금액을 찾을 수 없습니다: {amount}")
+                    return None
+            else:
+                print("❌ 요약 시트를 찾을 수 없습니다")
+                return None
+        except Exception as e:
+            print(f"❌ 금액 추출 실패: {e}")
+            return None
+        finally:
+            if 'workbook' in locals():
+                workbook.close()
+    
+    def calculate_amount_without_vat(self, total_amount):
+        """부가세 10%를 제외한 금액 계산"""
+        try:
+            # 부가세 포함 금액에서 부가세 제외
+            # 총금액 = 공급가액 + 부가세(공급가액의 10%)
+            # 총금액 = 공급가액 × 1.1
+            # 공급가액 = 총금액 / 1.1
+            amount_without_vat = total_amount / 1.1
+            print(f"✅ 부가세 제외 계산: {total_amount:,}원 → {amount_without_vat:,.0f}원")
+            return round(amount_without_vat)
+        except Exception as e:
+            print(f"❌ 부가세 제외 계산 실패: {e}")
+            return None
+    
+    def update_kolon_template(self, template_path, amount_without_vat, collection_date):
+        """kolon.xlsx 템플릿 파일 업데이트"""
+        try:
+            date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+            year_month = f"{date_obj.year}년 {date_obj.month:02d}월"
+            date_prefix = f"{str(date_obj.year)[2:]}{date_obj.month:02d}"
+            
+            # 출력 파일명 생성
+            output_filename = f"{date_prefix}_코오롱FnC_상담솔루션 청구내역서.xlsx"
+            output_path = os.path.join(self.download_dir, output_filename)
+            
+            # 템플릿 파일 복사
+            shutil.copy2(template_path, output_path)
+            print(f"✅ 템플릿 파일 복사 완료: {output_filename}")
+            
+            # 워크북 로드
+            workbook = load_workbook(output_path)
+            
+            # 1. 대외공문 시트 업데이트
+            if '대외공문' in workbook.sheetnames:
+                doc_sheet = workbook['대외공문']
+                
+                # B13 셀 업데이트: "제       목 : 2025년 07월 상담솔루션 서비스 수수료 정산 요청"
+                b13_cell = doc_sheet.cell(row=13, column=2)
+                if b13_cell.value and isinstance(b13_cell.value, str):
+                    old_text = b13_cell.value
+                    # 년월 패턴을 찾아서 교체
+                    new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
+                    b13_cell.value = new_text
+                    print(f"✅ 대외공문 B13 셀 업데이트: {old_text} → {new_text}")
+                
+                # B16 셀 업데이트 (B,C,D,E,F,G 16행 병합)
+                b16_cell = doc_sheet.cell(row=16, column=2)
+                if b16_cell.value and isinstance(b16_cell.value, str):
+                    old_text = b16_cell.value
+                    new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
+                    b16_cell.value = new_text
+                    print(f"✅ 대외공문 B16 셀 업데이트: {old_text} → {new_text}")
+                
+                # 하단 테이블 수식 업데이트 (B24, D24, D25)
+                self.update_formula_references(doc_sheet, year_month)
+            
+            # 2. 시트명 변경 및 해당 시트의 B,C,D,E1 병합 셀 텍스트 업데이트
+            for sheet in workbook.worksheets:
+                if re.match(r'\d{4}년 \d{1,2}월', sheet.title):
+                    old_title = sheet.title
+                    sheet.title = year_month
+                    print(f"✅ 시트명 변경: {old_title} → {year_month}")
+                    
+                    # B,C,D,E1 병합 셀의 텍스트 업데이트 ("2025년 07월 수수료 청구 금액" 형태)
+                    b1_cell = sheet.cell(row=1, column=2)  # B1 셀
+                    if b1_cell.value and isinstance(b1_cell.value, str):
+                        old_text = b1_cell.value
+                        # 년월 패턴을 찾아서 교체
+                        new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
+                        if new_text != old_text:
+                            b1_cell.value = new_text
+                            print(f"✅ {year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
+                    break
+            
+            # 3. 세부내역 시트 업데이트
+            if '세부내역' in workbook.sheetnames:
+                detail_sheet = workbook['세부내역']
+                # E12 셀에 부가세 제외 금액 입력
+                detail_sheet.cell(row=12, column=5).value = amount_without_vat
+                print(f"✅ 세부내역 시트 E12 셀 업데이트: {amount_without_vat:,}원")
+            
+            # 파일 저장
+            workbook.save(output_path)
+            workbook.close()
+            
+            print(f"✅ kolon.xlsx 템플릿 업데이트 완료: {output_filename}")
+            return output_path
+            
+        except Exception as e:
+            print(f"❌ kolon.xlsx 템플릿 업데이트 실패: {e}")
+            return None
+    
+    def update_formula_references(self, doc_sheet, year_month):
+        """대외공문 시트의 수식에서 시트명 참조 업데이트"""
+        try:
+            # 수식이 있을 수 있는 셀들 확인 (24행, 25행 등)
+            cells_to_check = [
+                (24, 2), (24, 3), (24, 4),  # B24, C24, D24
+                (25, 2), (25, 3), (25, 4),  # B25, C25, D25
+            ]
+            
+            for row, col in cells_to_check:
+                cell = doc_sheet.cell(row=row, column=col)
+                if cell.value and isinstance(cell.value, str) and cell.value.startswith('='):
+                    old_formula = cell.value
+                    # 수식에서 시트명 참조 패턴 찾아서 교체
+                    new_formula = re.sub(r"'(\d{4}년 \d{1,2}월)'!", f"'{year_month}'!", old_formula)
+                    if new_formula != old_formula:
+                        cell.value = new_formula
+                        print(f"✅ 대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
+                        
+        except Exception as e:
+            print(f"❌ 수식 참조 업데이트 오류: {e}")
 
     def process_kolon_data(self, collection_date):
         """코오롱 데이터 전처리 메인 함수"""
@@ -381,15 +571,18 @@ class KolonPreprocessor:
             
             print("✅ 데이터 전처리 완료")
             
-            # 5. 데이터 매칭
-            matched_data, unmatched_data = self.match_data(df_jaegyeong, df_openai)
+            # 5. 코오롱 데이터만 필터링
+            df_openai_kolon = df_openai[df_openai['계정'] == '코오롱'].copy()
+            
+            # 6. 데이터 매칭 (코오롱 데이터만)
+            matched_data, unmatched_data = self.match_data(df_jaegyeong, df_openai_kolon)
             if matched_data is None:
                 return False
             
             print(f"✅ 데이터 매칭 완료 (매칭: {len(matched_data)}건, 미매칭: {len(unmatched_data)}건)")
             
-            # 6. 결과 파일 생성
-            # 6.1. 매칭 결과 CSV 저장
+            # 7. 결과 파일 생성
+            # 7.1. 매칭 결과 CSV 저장
             date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             collection_month = datetime.strptime(collection_date, '%Y-%m-%d').strftime('%Y%m')
             
@@ -397,7 +590,7 @@ class KolonPreprocessor:
             openai_filename = f"OpenAI매칭결과_{date_str}_{collection_month}.csv"
             openai_path = os.path.join(self.download_dir, openai_filename)
             
-            # OpenAI 데이터로부터 결과 생성
+            # OpenAI 데이터로부터 결과 생성 (모든 계정)
             result_df = pd.DataFrame({
                 '매출일자': df_openai['datetime'].dt.strftime('%Y%m%d'),  # YYYYMMDD 형식
                 '승인시각': df_openai['datetime'].dt.strftime('%H%M%S'),  # HHMMSS 형식
@@ -409,15 +602,11 @@ class KolonPreprocessor:
                 '프로젝트': df_openai['계정']  # 계정값을 프로젝트로 사용
             })
             
+            # 코오롱 데이터만 필터링
+            kolon_df = df_openai[df_openai['계정'] == '코오롱'].copy()
+            
             result_df.to_csv(openai_path, index=False, encoding='utf-8-sig')
             print(f"✅ OpenAI 매칭결과 CSV 저장 완료: {openai_filename}")
-            
-            # 2. 코오롱 매칭결과 파일 생성 (매칭된 데이터만)
-            matched_filename = f"코오롱_매칭결과_{date_str}_{collection_month}.csv"
-            matched_path = os.path.join(self.download_dir, matched_filename)
-            matched_data.to_csv(matched_path, index=False, encoding='utf-8-sig')
-            
-            print(f"✅ 매칭 결과 CSV 저장 완료: {matched_filename}")
             
             # 6.2. 요약 보고서 Excel 저장
             report_filename = f"코오롱_청구내역서_{date_str}_{collection_month}.xlsx"
@@ -425,6 +614,39 @@ class KolonPreprocessor:
             
             if self.save_kolon_excel(matched_data, report_path):
                 print(f"✅ 청구내역서 Excel 저장 완료: {report_filename}")
+                
+                # 7. Firebase에서 kolon.xlsx 템플릿 다운로드 및 청구서 생성
+                print("🔥 Firebase kolon.xlsx 템플릿 처리 시작")
+                
+                # 7.1. 요약 시트에서 금액 추출
+                total_amount = self.extract_amount_from_summary(report_path)
+                if total_amount is None:
+                    print("❌ 요약 시트에서 금액 추출 실패")
+                    return False
+                
+                # 7.2. 부가세 제외 금액 계산
+                amount_without_vat = self.calculate_amount_without_vat(total_amount)
+                if amount_without_vat is None:
+                    print("❌ 부가세 제외 계산 실패")
+                    return False
+                
+                # 7.3. kolon.xlsx 템플릿 다운로드
+                template_path = self.download_kolon_template()
+                if template_path is None:
+                    print("❌ kolon.xlsx 템플릿 다운로드 실패")
+                    return False
+                
+                # 7.4. 템플릿 업데이트 및 청구서 생성
+                final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date)
+                if final_invoice_path is None:
+                    print("❌ 코오롱 청구서 생성 실패")
+                    return False
+                
+                print(f"✅ 코오롱 전처리 완료! 총 3개 파일 생성:")
+                print(f"   1. OpenAI 매칭결과: {openai_filename}")
+                print(f"   2. 코오롱 청구내역서: {report_filename}")
+                print(f"   3. 코오롱FnC 상담솔루션 청구내역서: {os.path.basename(final_invoice_path)}")
+                
                 return True
             else:
                 print("❌ 청구내역서 Excel 저장 실패")
@@ -435,3 +657,4 @@ class KolonPreprocessor:
             print(f"❌ 전처리 실패: {e}")
             print(f"상세 에러: {traceback.format_exc()}")
             return False
+

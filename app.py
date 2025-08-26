@@ -15,6 +15,7 @@ from backend.data_collection.new_admin_manager import NewAdminManager
 from backend.data_collection.config import DateConfig, AccountConfig, ElementConfig
 from backend.preprocessing.anhous_preprocessing import EnhancedAnhousePreprocessor
 from backend.preprocessing.kolon_preprocessing import KolonPreprocessor
+from backend.preprocessing.bill_processor import BillProcessor
 
 app = Flask(__name__)
 CORS(app)
@@ -24,6 +25,7 @@ db_manager = DatabaseManager()
 login_manager = LoginManager()
 data_manager = DataManager(login_manager)
 new_admin_manager = NewAdminManager(data_manager)
+bill_processor = BillProcessor()
 print("✅ 크롤링 시스템 초기화 완료")
 
 # 작업 상태 저장
@@ -33,6 +35,17 @@ print("🚀 청구자동화 API 서버 시작")
 print("🔧 모드: 실제 크롤링")
 print("📍 Frontend: http://localhost:3000")
 print("📍 Backend API: http://localhost:5001")
+
+@app.route('/api/companies', methods=['GET'])
+def get_companies():
+    """고객사 목록 조회"""
+    try:
+        return jsonify({
+            "companies": AccountConfig.COMPANIES
+        })
+    except Exception as e:
+        print(f"❌ 고객사 목록 조회 오류: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -503,12 +516,13 @@ def process_file():
                     current_time = time.time()
                     all_files = os.listdir(download_dir)
                     
-                    # 가장 최근에 생성된 청구내역서와 OpenAI 매칭결과 파일만 찾기
+                    # 코오롱 관련 3개 파일 찾기: 청구내역서, OpenAI 매칭결과, 코오롱FnC 상담솔루션 청구내역서
                     processed_files = []
                     
                     for filename in all_files:
                         if (("코오롱_청구내역서_" in filename and filename.endswith(".xlsx")) or
-                            ("OpenAI매칭결과_" in filename and filename.endswith(".csv"))):
+                            ("OpenAI매칭결과_" in filename and filename.endswith(".csv")) or
+                            ("코오롱FnC" in filename and "상담솔루션 청구내역서" in filename and filename.endswith(".xlsx"))):
                             file_path = os.path.join(download_dir, filename)
                             if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
                                 processed_files.append((filename, os.path.getctime(file_path)))
@@ -534,6 +548,44 @@ def process_file():
         
     except Exception as e:
         print(f"❌ 전처리 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/upload-bills', methods=['POST'])
+def upload_bills():
+    """HTML 고지서 일괄 업로드 및 처리"""
+    try:
+        if 'files[]' not in request.files:
+            return jsonify({"error": "파일이 없습니다"}), 400
+        
+        files = request.files.getlist('files[]')
+        html_files = [f for f in files if f.filename.endswith('.html')]
+        
+        if not html_files:
+            return jsonify({"error": "HTML 파일이 없습니다"}), 400
+        
+        # HTML 파일 처리 및 통신비 정보 추출
+        results = bill_processor.process_html_files(html_files)
+        
+        if results:
+            return jsonify({
+                "message": "고지서 처리 완료",
+                "bill_amounts": results
+            })
+        else:
+            return jsonify({"error": "고지서 처리 실패"}), 500
+            
+    except Exception as e:
+        print(f"❌ 고지서 업로드 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/bill-amounts', methods=['GET'])
+def get_bill_amounts():
+    """각 고객사별 통신비 조회"""
+    try:
+        amounts = bill_processor.get_bill_amounts()
+        return jsonify(amounts)
+    except Exception as e:
+        print(f"❌ 통신비 조회 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Download, Upload, Play, Loader2, Settings } from 'lucide-react';
 import AccountManager from './AccountManager';
 
@@ -16,85 +16,139 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
 
   const [showAccountManager, setShowAccountManager] = useState(false);
 
-  const [companies, setCompanies] = useState([
-    {
-      name: '앤하우스',
-      type: 'sms_call',
-      collecting: false,
-      collectedFiles: [],
-      uploadedFiles: [],
-      requiredFileCount: 2,
-      fileLabels: ['SMS 데이터', 'CALL 데이터'],
-      processing: false,
-      processedFiles: []
-    },
-    {
-      name: '디싸이더스/애드플젝',
-      type: 'sms',
-      collecting: false,
-      collectedFiles: [],
-      uploadedFiles: [],
-      requiredFileCount: 5,
-      fileLabels: ['SMS 데이터', 'CHAT 데이터', '추가 파일 1', '추가 파일 2', '추가 파일 3'],
-      processing: false,
-      processedFiles: []
-    },
-    {
-      name: '매스프레소(콴다)',
-      type: 'sms',
-      collecting: false,
-      collectedFiles: [],
-      uploadedFiles: [],
-      requiredFileCount: 1,
-      fileLabels: ['SMS 데이터'],
-      processing: false,
-      processedFiles: []
-    },
-    {
-      name: '코오롱Fnc',
-      type: 'manual',
-      collecting: false,
-      collectedFiles: [],
-      uploadedFiles: [],
-      requiredFileCount: 2,
-      fileLabels: ['데이터 파일 1', '데이터 파일 2'],
-      processing: false,
-      processedFiles: []
-    },
-    {
-      name: 'SK일렉링크',
-      type: 'manual',
-      collecting: false,
-      collectedFiles: [],
-      uploadedFiles: [],
-      requiredFileCount: 1,
-      fileLabels: ['데이터 파일'],
-      processing: false,
-      processedFiles: []
-    },
-    {
-      name: 'W컨셉',
-      type: 'manual',
-      collecting: false,
-      collectedFiles: [],
-      uploadedFiles: [],
-      requiredFileCount: 1,
-      fileLabels: ['데이터 파일'],
-      processing: false,
-      processedFiles: []
-    },
-    {
-      name: '메디빌더',
-      type: 'manual',
-      collecting: false,
-      collectedFiles: [],
-      uploadedFiles: [],
-      requiredFileCount: 2,
-      fileLabels: ['데이터 파일 1', '데이터 파일 2'],
-      processing: false,
-      processedFiles: []
+  const [companies, setCompanies] = useState([]);
+  const [billAmounts, setBillAmounts] = useState({});
+  const [isUploading, setIsUploading] = useState(false);
+
+  // 고객사 목록 가져오기
+  // 통신비 정보 가져오기
+  const fetchBillAmounts = async () => {
+    try {
+      const response = await fetch('http://localhost:5001/api/bill-amounts');
+      const data = await response.json();
+      setBillAmounts(data);
+      
+      // 회사 정보 업데이트
+      setCompanies(prev => prev.map(company => ({
+        ...company,
+        billAmount: data[company.name]?.amount,
+        billUpdateDate: data[company.name]?.update_date
+      })));
+    } catch (error) {
+      console.error('통신비 정보 가져오기 실패:', error);
     }
-  ]);
+  };
+
+  // 고지서 업로드 처리
+  const handleBillUpload = async (event) => {
+    const files = event.target.files;
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files[]', files[i]);
+    }
+
+    try {
+      const response = await fetch('http://localhost:5001/api/upload-bills', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        console.log('고지서 처리 완료:', result);
+        // 통신비 정보 새로고침
+        await fetchBillAmounts();
+      } else {
+        alert(`고지서 처리 실패: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('고지서 업로드 실패:', error);
+      alert('고지서 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+
+    // 파일 선택 초기화
+    event.target.value = '';
+  };
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const response = await fetch('http://localhost:5001/api/companies');
+        const data = await response.json();
+        
+        // 고객사별 설정
+        const companyConfigs = {
+          '앤하우스': {
+            type: 'sms_call',
+            requiredFileCount: 2,
+            fileLabels: ['SMS 데이터', 'CALL 데이터']
+          },
+          '디싸이더스/애드프로젝트': {
+            type: 'sms',
+            requiredFileCount: 5,
+            fileLabels: ['SMS 데이터', 'CHAT 데이터', '추가 파일 1', '추가 파일 2', '추가 파일 3']
+          },
+          '매스프레소(콴다)': {
+            type: 'sms',
+            requiredFileCount: 1,
+            fileLabels: ['SMS 데이터']
+          },
+          '코오롱Fnc': {
+            type: 'manual',
+            requiredFileCount: 2,
+            fileLabels: ['데이터 파일 1', '데이터 파일 2']
+          },
+          'SK일렉링크': {
+            type: 'manual',
+            requiredFileCount: 1,
+            fileLabels: ['데이터 파일']
+          },
+          'W컨셉': {
+            type: 'manual',
+            requiredFileCount: 1,
+            fileLabels: ['데이터 파일']
+          },
+          '메디빌더': {
+            type: 'manual',
+            requiredFileCount: 2,
+            fileLabels: ['데이터 파일 1', '데이터 파일 2']
+          },
+          '구쁘': {
+            type: 'manual',
+            requiredFileCount: 2,
+            fileLabels: ['데이터 파일 1', '데이터 파일 2']
+          }
+        };
+
+        // 고객사 목록 설정
+        const formattedCompanies = data.companies.map(name => ({
+          name,
+          ...companyConfigs[name],
+          collecting: false,
+          collectedFiles: [],
+          uploadedFiles: [],
+          processing: false,
+          processedFiles: []
+        }));
+
+        setCompanies(formattedCompanies);
+        
+        // 통신비 정보도 함께 가져오기
+        fetchBillAmounts();
+      } catch (error) {
+        console.error('고객사 목록 가져오기 실패:', error);
+      }
+    };
+
+    fetchCompanies();
+  }, []);
 
   const handleDateChange = (field, value) => {
     setDateRange(prev => ({
@@ -481,9 +535,29 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
               <span>ISC/PJ명</span>
             </div>
             
-            {/* 수집된 파일 헤더 */}
-            <div className="col-span-3 text-center">
-              <span>수집된 파일</span>
+            {/* 고지서 헤더 */}
+            <div className="col-span-3 flex items-center justify-center gap-3">
+              <span>고지서</span>
+              {/* 고지서 일괄 업로드 */}
+              <div className="relative">
+                <label className={`cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".html"
+                    multiple
+                    onChange={handleBillUpload}
+                    disabled={isUploading}
+                  />
+                  <div className="w-8 h-8 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-gray-400 transition-colors">
+                    {isUploading ? (
+                      <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4 text-gray-400" />
+                    )}
+                  </div>
+                </label>
+              </div>
             </div>
             
             {/* 구분선 */}
@@ -531,24 +605,21 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
                   </button>
                 </div>
 
-                {/* 수집된 파일 영역 */}
-                <div className="col-span-3">
-                  <div className="flex flex-col gap-1 items-center">
-                    {company.collectedFiles.length > 0 ? (
-                      company.collectedFiles.map((file, index) => (
-                        <span
-                          key={index}
-                          className="text-gray-700 text-sm text-center max-w-full truncate"
-                          title={file}
-                        >
-                          {file}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
-                  </div>
-                </div>
+                            {/* 고지서 영역 */}
+            <div className="col-span-3 flex flex-col justify-center items-center gap-1">
+              {company.billAmount ? (
+                <>
+                  <span className="text-green-600 font-medium">
+                    {company.billAmount}
+                  </span>
+                  <span className="text-gray-400 text-xs">
+                    {company.billUpdateDate} 업데이트
+                  </span>
+                </>
+              ) : (
+                <span className="text-gray-400 text-sm">-</span>
+              )}
+            </div>
 
                 {/* 구분선 */}
                 <div className="col-span-1 flex justify-center items-center">
