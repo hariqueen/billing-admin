@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Download, Upload, Play, Loader2, Settings } from 'lucide-react';
 import AccountManager from './AccountManager';
 
-const BillingAutomationAdmin = () => {
+const BillingAutomationAdmin = ({ user, onLogout }) => {
   const [dateRange, setDateRange] = useState({
     startDate: '2025-05-01',
     endDate: '2025-05-31'
@@ -415,9 +415,31 @@ const BillingAutomationAdmin = () => {
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* 헤더 */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">청구자동화 어드민</h1>
-          <p className="text-gray-600">서비스S본부 - 데이터 수집 및 전처리 시스템</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">청구자동화 어드민</h1>
+            <p className="text-gray-600">서비스S본부 - 데이터 수집 및 전처리 시스템</p>
+          </div>
+          
+          {/* 사용자 정보 */}
+          {user && (
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-sm font-medium text-gray-900">
+                  {user.name} {user.position}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {user.employeeId}
+                </div>
+              </div>
+              <button
+                onClick={onLogout}
+                className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                로그아웃
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 날짜 선택 */}
@@ -479,9 +501,9 @@ const BillingAutomationAdmin = () => {
               <span>전처리</span>
             </div>
             
-            {/* 견적서 헤더 */}
+            {/* 청구서 헤더 */}
             <div className="col-span-2 text-center">
-              <span>견적서</span>
+              <span>청구서</span>
             </div>
           </div>
         </div>
@@ -602,7 +624,7 @@ const BillingAutomationAdmin = () => {
                   </button>
                 </div>
 
-                {/* 견적서 영역 */}
+                {/* 청구서 영역 */}
                 <div className="col-span-2 flex flex-col items-center gap-1">
                   {company.processedFiles && company.processedFiles.length > 0 ? (
                     company.processedFiles.map((filename, index) => (

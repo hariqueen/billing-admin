@@ -13,7 +13,7 @@ from backend.data_collection.login_manager import LoginManager
 from backend.data_collection.data_manager import DataManager
 from backend.data_collection.new_admin_manager import NewAdminManager
 from backend.data_collection.config import DateConfig, AccountConfig, ElementConfig
-from backend.preprocessing.enhanced_anhous_preprocessing import EnhancedAnhousePreprocessor
+from backend.preprocessing.anhous_preprocessing import EnhancedAnhousePreprocessor
 
 app = Flask(__name__)
 CORS(app)
@@ -473,7 +473,7 @@ def process_file():
                     all_files = os.listdir(download_dir)
                     
                     for filename in all_files:
-                        # 년월 형식에 관계없이 앤하우스 수수료 청구내역서 파일 찾기
+                        # 앤하우스 수수료 청구내역서 파일 찾기
                         if "앤하우스 수수료 청구내역서_" in filename and filename.endswith(".xlsx"):
                             file_path = os.path.join(download_dir, filename)
                             # 최근 5분 이내에 생성된 파일만 포함
