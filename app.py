@@ -14,6 +14,7 @@ from backend.data_collection.data_manager import DataManager
 from backend.data_collection.new_admin_manager import NewAdminManager
 from backend.data_collection.config import DateConfig, AccountConfig, ElementConfig
 from backend.preprocessing.anhous_preprocessing import EnhancedAnhousePreprocessor
+from backend.preprocessing.kolon_preprocessing import KolonPreprocessor
 
 app = Flask(__name__)
 CORS(app)
@@ -457,7 +458,7 @@ def process_file():
         if not all([company_name, collection_date]):
             return jsonify({"error": "필수 파라미터 누락"}), 400
         
-        # 앤하우스인 경우에만 전처리 실행
+        # 회사별 전처리 실행
         if company_name == "앤하우스":
             preprocessor = EnhancedAnhousePreprocessor()
             success = preprocessor.process_anhous_data(collection_date)
@@ -479,6 +480,47 @@ def process_file():
                             # 최근 5분 이내에 생성된 파일만 포함
                             if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
                                 processed_files.append(filename)
+                
+                return jsonify({
+                    "message": "전처리 완료",
+                    "company": company_name,
+                    "processed_files": processed_files
+                })
+            else:
+                return jsonify({"error": "전처리 실패"}), 500
+                
+        elif company_name == "코오롱Fnc":
+            preprocessor = KolonPreprocessor()
+            success = preprocessor.process_kolon_data(collection_date)
+            
+            if success:
+                # 다운로드 폴더에서 생성된 파일명 찾기
+                download_dir = str(Path.home() / "Downloads")
+                processed_files = []
+                
+                if os.path.exists(download_dir):
+                    import time
+                    current_time = time.time()
+                    all_files = os.listdir(download_dir)
+                    
+                    # 가장 최근에 생성된 청구내역서와 OpenAI 매칭결과 파일만 찾기
+                    processed_files = []
+                    
+                    for filename in all_files:
+                        if (("코오롱_청구내역서_" in filename and filename.endswith(".xlsx")) or
+                            ("OpenAI매칭결과_" in filename and filename.endswith(".csv"))):
+                            file_path = os.path.join(download_dir, filename)
+                            if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
+                                processed_files.append((filename, os.path.getctime(file_path)))
+                    
+                    # 가장 최근 파일들 선택
+                    if processed_files:
+                        latest_files = sorted(processed_files, key=lambda x: x[1], reverse=True)
+                        return jsonify({
+                            "message": "전처리 완료",
+                            "company": company_name,
+                            "processed_files": [f[0] for f in latest_files]
+                        })
                 
                 return jsonify({
                     "message": "전처리 완료",

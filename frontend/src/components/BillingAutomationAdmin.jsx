@@ -564,7 +564,7 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
                         <input
                           type="file"
                           className="hidden"
-                          accept=".xlsx,.xls"
+                          accept=".xlsx,.xls,.csv"
                           multiple
                           onChange={(e) => handleMultipleFileUpload(company.name, e)}
                         />
