@@ -14,6 +14,12 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     files: []
   });
 
+  const [licensePopup, setLicensePopup] = useState({
+    isOpen: false,
+    companyName: '',
+    licenseCount: 40
+  });
+
   const [showAccountManager, setShowAccountManager] = useState(false);
 
   const [companies, setCompanies] = useState([]);
@@ -321,6 +327,24 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     setFilePopup({ isOpen: false, companyName: '', files: [] });
   };
 
+  const showLicensePopup = (companyName) => {
+    setLicensePopup({
+      isOpen: true,
+      companyName: companyName,
+      licenseCount: 40
+    });
+  };
+
+  const closeLicensePopup = () => {
+    setLicensePopup({ isOpen: false, companyName: '', licenseCount: 40 });
+  };
+
+  const handleLicenseConfirm = async () => {
+    const { companyName, licenseCount } = licensePopup;
+    closeLicensePopup();
+    await handleProcess(companyName, licenseCount);
+  };
+
   // 청구서 결과 초기화
   const clearProcessedFiles = async (companyName) => {
     try {
@@ -411,13 +435,13 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     event.target.value = '';
   };
 
-  const handleProcess = async (companyName) => {
+  const handleProcess = async (companyName, licenseCount = null) => {
     const company = companies.find(c => c.name === companyName);
     
-    // SK일렉링크는 고지서 업로드 여부만 확인
-    if (companyName === 'SK일렉링크') {
+    // SK일렉링크와 W컨셉은 고지서 업로드 여부만 확인
+    if (companyName === 'SK일렉링크' || companyName === 'W컨셉') {
       if (!company.billAmount) {
-        alert('SK일렉링크는 고지서가 업로드되어야 전처리가 가능합니다.');
+        alert(`${companyName}는 고지서가 업로드되어야 전처리가 가능합니다.`);
         return;
       }
     } else {
@@ -441,15 +465,22 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
 
     try {
       // 실제 전처리 API 호출
+      const requestBody = {
+        company_name: companyName,
+        collection_date: dateRange.startDate  // YYYY-MM-DD 형식
+      };
+
+      // W컨셉인 경우 라이선스 수량 추가
+      if (companyName === 'W컨셉' && licenseCount !== null) {
+        requestBody.license_count = licenseCount;
+      }
+
       const response = await fetch('http://localhost:5001/api/process-file', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          company_name: companyName,
-          collection_date: dateRange.startDate  // YYYY-MM-DD 형식
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const result = await response.json();
@@ -731,11 +762,11 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
                 {/* 전처리 영역 */}
                 <div className="col-span-2 flex justify-center">
                   <button
-                    onClick={() => handleProcess(company.name)}
+                    onClick={() => company.name === 'W컨셉' ? showLicensePopup(company.name) : handleProcess(company.name)}
                     disabled={
                       company.processing || (
-                        company.name === 'SK일렉링크'
-                          ? !company.billAmount  // SK일렉링크는 고지서 업로드 여부만 확인
+                        company.name === 'SK일렉링크' || company.name === 'W컨셉'
+                          ? !company.billAmount  // SK일렉링크와 W컨셉은 고지서 업로드 여부만 확인
                           : company.name === '디싸이더스/애드프로젝트' 
                             ? company.uploadedFiles.filter(file => file).length < 2 
                             : company.uploadedFiles.filter(file => file).length < company.requiredFileCount
@@ -844,6 +875,63 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
                 >
                   닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 라이선스 수량 입력 팝업 */}
+        {licensePopup.isOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {licensePopup.companyName} - 청구 라이선스 수량
+                </h3>
+                <button
+                  onClick={closeLicensePopup}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  청구 라이선스 수량을 입력해주세요
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={licensePopup.licenseCount}
+                    onChange={(e) => setLicensePopup(prev => ({
+                      ...prev,
+                      licenseCount: parseInt(e.target.value) || 40
+                    }))}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="40"
+                  />
+                  <span className="text-gray-600">개</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  기본값: 40개 (필요에 따라 수정 가능)
+                </p>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={closeLicensePopup}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleLicenseConfirm}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  확인
                 </button>
               </div>
             </div>

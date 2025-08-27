@@ -588,6 +588,40 @@ def process_file():
                 })
             else:
                 return jsonify({"error": "전처리 실패"}), 500
+
+        elif company_name == "W컨셉":
+            # W컨셉은 라이선스 수량이 필요
+            license_count = data.get('license_count', 40)
+            print(f"📊 W컨셉 라이선스 수량: {license_count}개")
+            
+            processed_files = bill_processor.process_wconcept(collection_date, license_count)
+            
+            if processed_files:
+                # 결과 저장
+                save_processed_files(company_name, processed_files)
+                
+                return jsonify({
+                    "message": "전처리 완료",
+                    "company": company_name,
+                    "processed_files": processed_files
+                })
+            else:
+                return jsonify({"error": "전처리 실패"}), 500
+
+        elif company_name == "매스프레소(콴다)":
+            processed_files = bill_processor.process_mathpresso(collection_date)
+            
+            if processed_files:
+                # 결과 저장
+                save_processed_files(company_name, processed_files)
+                
+                return jsonify({
+                    "message": "전처리 완료",
+                    "company": company_name,
+                    "processed_files": processed_files
+                })
+            else:
+                return jsonify({"error": "전처리 실패"}), 500
         else:
             return jsonify({"error": f"{company_name}은 전처리를 지원하지 않습니다"}), 400
         

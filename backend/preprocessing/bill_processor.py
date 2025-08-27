@@ -1,6 +1,7 @@
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -11,6 +12,8 @@ import time
 from bs4 import BeautifulSoup
 from ..data_collection.config import AccountConfig
 from ..storage.admin_storage import AdminStorage
+from .wconcept_preprocessing import WConceptPreprocessor
+from .mathpresso_preprocessing import MathpressoPreprocessor
 
 class BillProcessor:
     def __init__(self, admin_storage=None):
@@ -161,3 +164,55 @@ class BillProcessor:
     def get_bill_amounts(self):
         """저장된 통신비 정보 조회"""
         return self.storage.get_bill_amounts()
+
+    def process_wconcept(self, collection_date, license_count=40):
+        """W컨셉 전처리 처리"""
+        try:
+            preprocessor = WConceptPreprocessor()
+            success = preprocessor.process_wconcept_data(collection_date, license_count)
+            
+            if success:
+                # 성공 시 다운로드 폴더에서 생성된 파일 찾기
+                download_dir = str(Path.home() / "Downloads")
+                date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+                date_prefix = f"{str(date_obj.year)[2:]}{date_obj.month:02d}"
+                expected_filename = f"{date_prefix}_W컨셉_청구내역서.xlsx"
+                expected_path = os.path.join(download_dir, expected_filename)
+                
+                if os.path.exists(expected_path):
+                    return [expected_filename]
+                else:
+                    print(f"❌ 생성된 파일을 찾을 수 없습니다: {expected_path}")
+                    return []
+            else:
+                return []
+                
+        except Exception as e:
+            print(f"❌ W컨셉 전처리 실패: {e}")
+            return []
+
+    def process_mathpresso(self, collection_date):
+        """매스프레소(콴다) 전처리 처리"""
+        try:
+            preprocessor = MathpressoPreprocessor()
+            success = preprocessor.process_mathpresso_data(collection_date)
+            
+            if success:
+                # 성공 시 다운로드 폴더에서 생성된 파일 찾기
+                download_dir = str(Path.home() / "Downloads")
+                date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+                date_prefix = f"{str(date_obj.year)[2:]}{date_obj.month:02d}"
+                expected_filename = f"{date_prefix}_매스프레소(콴다)_청구내역서.xlsx"
+                expected_path = os.path.join(download_dir, expected_filename)
+                
+                if os.path.exists(expected_path):
+                    return [expected_filename]
+                else:
+                    print(f"❌ 생성된 파일을 찾을 수 없습니다: {expected_path}")
+                    return []
+            else:
+                return []
+                
+        except Exception as e:
+            print(f"❌ 매스프레소(콴다) 전처리 실패: {e}")
+            return []
