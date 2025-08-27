@@ -6,6 +6,7 @@ from datetime import datetime
 import uuid
 import traceback
 from pathlib import Path
+import json
 
 # 크롤링 모듈들 import
 from backend.data_collection.database import DatabaseManager
@@ -15,7 +16,9 @@ from backend.data_collection.new_admin_manager import NewAdminManager
 from backend.data_collection.config import DateConfig, AccountConfig, ElementConfig
 from backend.preprocessing.anhous_preprocessing import EnhancedAnhousePreprocessor
 from backend.preprocessing.kolon_preprocessing import KolonPreprocessor
+from backend.preprocessing.sk_preprocessing import SKElectlinkPreprocessor
 from backend.preprocessing.bill_processor import BillProcessor
+from backend.storage.admin_storage import AdminStorage
 
 app = Flask(__name__)
 CORS(app)
@@ -25,7 +28,8 @@ db_manager = DatabaseManager()
 login_manager = LoginManager()
 data_manager = DataManager(login_manager)
 new_admin_manager = NewAdminManager(data_manager)
-bill_processor = BillProcessor()
+admin_storage = AdminStorage()
+bill_processor = BillProcessor(admin_storage)
 print("✅ 크롤링 시스템 초기화 완료")
 
 # 작업 상태 저장
@@ -494,6 +498,9 @@ def process_file():
                             if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
                                 processed_files.append(filename)
                 
+                # 결과 저장
+                save_processed_files(company_name, processed_files)
+                
                 return jsonify({
                     "message": "전처리 완료",
                     "company": company_name,
@@ -530,11 +537,49 @@ def process_file():
                     # 가장 최근 파일들 선택
                     if processed_files:
                         latest_files = sorted(processed_files, key=lambda x: x[1], reverse=True)
+                        processed_file_names = [f[0] for f in latest_files]
+                        
+                        # 결과 저장
+                        save_processed_files(company_name, processed_file_names)
+                        
                         return jsonify({
                             "message": "전처리 완료",
                             "company": company_name,
-                            "processed_files": [f[0] for f in latest_files]
+                            "processed_files": processed_file_names
                         })
+                
+                return jsonify({
+                    "message": "전처리 완료",
+                    "company": company_name,
+                    "processed_files": processed_files
+                })
+            else:
+                return jsonify({"error": "전처리 실패"}), 500
+        
+        elif company_name == "SK일렉링크":
+            preprocessor = SKElectlinkPreprocessor()
+            success = preprocessor.process_sk_data(collection_date)
+            
+            if success:
+                # 다운로드 폴더에서 생성된 파일명 찾기
+                download_dir = str(Path.home() / "Downloads")
+                processed_files = []
+                
+                if os.path.exists(download_dir):
+                    import time
+                    current_time = time.time()
+                    all_files = os.listdir(download_dir)
+                    
+                    for filename in all_files:
+                        # SK일렉링크 청구내역서 파일 찾기
+                        if ("SK일렉링크" in filename and "청구내역서" in filename and filename.endswith(".xlsx")):
+                            file_path = os.path.join(download_dir, filename)
+                            # 최근 5분 이내에 생성된 파일만 포함
+                            if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
+                                processed_files.append(filename)
+                
+                # 결과 저장
+                save_processed_files(company_name, processed_files)
                 
                 return jsonify({
                     "message": "전처리 완료",
@@ -586,6 +631,40 @@ def get_bill_amounts():
         return jsonify(amounts)
     except Exception as e:
         print(f"❌ 통신비 조회 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# 청구서 결과 영속성 관리 (통합 저장소 사용)
+def save_processed_files(company_name, processed_files):
+    """청구서 결과 저장"""
+    admin_storage.save_processed_files(company_name, processed_files)
+
+def clear_processed_files(company_name):
+    """특정 회사의 청구서 결과 초기화"""
+    admin_storage.clear_processed_files(company_name)
+
+@app.route('/api/get-processed-files', methods=['GET'])
+def get_processed_files():
+    """저장된 청구서 결과 조회"""
+    try:
+        processed_files = admin_storage.get_processed_files()
+        return jsonify({"processed_files": processed_files})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/clear-processed-files', methods=['POST'])
+def clear_company_processed_files():
+    """특정 회사의 청구서 결과 초기화"""
+    try:
+        data = request.get_json()
+        company_name = data.get('company_name')
+        
+        if not company_name:
+            return jsonify({"error": "회사명이 필요합니다"}), 400
+        
+        admin_storage.clear_processed_files(company_name)
+        return jsonify({"message": f"{company_name} 청구서 결과 초기화 완료"})
+        
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

@@ -10,13 +10,19 @@ from selenium.common.exceptions import TimeoutException
 import time
 from bs4 import BeautifulSoup
 from ..data_collection.config import AccountConfig
+from ..storage.admin_storage import AdminStorage
 
 class BillProcessor:
-    def __init__(self):
+    def __init__(self, admin_storage=None):
         self.temp_dir = "temp_processing"
         self.password = "1208192287"
-        # 메모리에 금액과 업데이트 날짜 저장
-        self.bill_data = {}
+        # 통합 저장소 사용 (외부에서 전달받거나 새로 생성)
+        if admin_storage:
+            self.storage = admin_storage
+        else:
+            self.storage = AdminStorage()
+            # 기존 파일이 있다면 마이그레이션 실행 (새로 생성된 경우만)
+            self.storage.migrate_from_separate_files()
         
         # 고객사별 정규식 매핑
         self.customer_mapping = {
@@ -110,7 +116,7 @@ class BillProcessor:
             update_date = datetime.now().strftime("%m/%d")  # 업데이트 날짜 (MM/DD)
             
             # 기존 데이터 유지하면서 업데이트
-            current_results = self.bill_data.copy() if self.bill_data else {}
+            current_results = self.storage.get_bill_amounts().copy()
             
             for file in files:
                 try:
@@ -128,8 +134,9 @@ class BillProcessor:
                                 "amount": amount,
                                 "update_date": update_date
                             }
-                            # 즉시 메모리에 반영
-                            self.bill_data = current_results.copy()
+                            
+                        # 통합 저장소에 일괄 저장
+                        self.storage.batch_update_bill_amounts(current_results)
                     
                     # 임시 파일 삭제
                     try:
@@ -140,7 +147,7 @@ class BillProcessor:
                 except:
                     pass
             
-            return self.bill_data
+            return self.storage.get_bill_amounts()
                 
         except:
             return None
@@ -153,4 +160,4 @@ class BillProcessor:
 
     def get_bill_amounts(self):
         """저장된 통신비 정보 조회"""
-        return self.bill_data
+        return self.storage.get_bill_amounts()

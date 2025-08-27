@@ -620,9 +620,8 @@ class EnhancedAnhousePreprocessor:
             
             print(f"✅ 전처리 완료: {len(updated_files)}개 파일 업데이트")
             
-            # temp_processing 폴더 정리 (임시로 비활성화)
-            # self.cleanup_temp_folder()
-            print("🔍 디버깅: temp_processing 폴더 유지")
+            # temp_processing 폴더 정리
+            self.cleanup_temp_folder()
             
             return True
             
@@ -631,20 +630,19 @@ class EnhancedAnhousePreprocessor:
             return False
     
     def cleanup_temp_folder(self):
-        """temp_processing 폴더 정리 (임시로 비활성화)"""
-        print("🔍 디버깅: cleanup_temp_folder 함수 비활성화됨")
-        return
-        # try:
-        #     temp_dir = "temp_processing"
-        #     if os.path.exists(temp_dir):
-        #         # 모든 파일 삭제
-        #         for filename in os.listdir(temp_dir):
-        #             file_path = os.path.join(temp_dir, filename)
-        #             os.remove(file_path)
-        #             print(f"🗑️ 삭제: {filename}")
-        #         
-        #         # temp_processing 폴더 삭제
-        #         os.rmdir(temp_dir)
-        #         print("🗑️ temp_processing 폴더 삭제")
-        # except Exception as e:
-        #     print(f"❌ 폴더 정리 실패: {e}")
+        """temp_processing 폴더 정리"""
+        try:
+            temp_dir = "temp_processing"
+            if os.path.exists(temp_dir):
+                # 모든 파일 삭제
+                for filename in os.listdir(temp_dir):
+                    file_path = os.path.join(temp_dir, filename)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        print(f"🗑️ 삭제: {filename}")
+                
+                print("✅ temp_processing 폴더 정리 완료")
+            else:
+                print("⚠️ temp_processing 폴더가 존재하지 않습니다")
+        except Exception as e:
+            print(f"❌ 폴더 정리 실패: {e}")

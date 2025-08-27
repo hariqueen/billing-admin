@@ -647,6 +647,9 @@ class KolonPreprocessor:
                 print(f"   2. 코오롱 청구내역서: {report_filename}")
                 print(f"   3. 코오롱FnC 상담솔루션 청구내역서: {os.path.basename(final_invoice_path)}")
                 
+                # 8. temp_processing 폴더 정리
+                self.cleanup_temp_folder()
+                
                 return True
             else:
                 print("❌ 청구내역서 Excel 저장 실패")
@@ -657,4 +660,22 @@ class KolonPreprocessor:
             print(f"❌ 전처리 실패: {e}")
             print(f"상세 에러: {traceback.format_exc()}")
             return False
+    
+    def cleanup_temp_folder(self):
+        """temp_processing 폴더 정리"""
+        try:
+            temp_dir = "temp_processing"
+            if os.path.exists(temp_dir):
+                # 모든 파일 삭제
+                for filename in os.listdir(temp_dir):
+                    file_path = os.path.join(temp_dir, filename)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        print(f"🗑️ 삭제: {filename}")
+                
+                print("✅ temp_processing 폴더 정리 완료")
+            else:
+                print("⚠️ temp_processing 폴더가 존재하지 않습니다")
+        except Exception as e:
+            print(f"❌ 폴더 정리 실패: {e}")
 

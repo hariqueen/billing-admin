@@ -1,0 +1,36 @@
+{
+  "bill_amounts": {
+    "앤하우스": {
+      "amount": "48,930원",
+      "update_date": "08/27"
+    },
+    "매스프레소(콴다)": {
+      "amount": "48,050원",
+      "update_date": "08/27"
+    },
+    "디싸이더스/애드프로젝트": {
+      "amount": "11,000원",
+      "update_date": "08/27"
+    },
+    "W컨셉": {
+      "amount": "862,120원",
+      "update_date": "08/27"
+    },
+    "SK일렉링크": {
+      "amount": "82,390원",
+      "update_date": "08/27"
+    },
+    "구쁘": {
+      "amount": "55,850원",
+      "update_date": "08/27"
+    }
+  },
+  "processed_files": {
+    "SK일렉링크": {
+      "processed_files": [
+        "2505_SK일렉링크_청구내역서.xlsx"
+      ],
+      "timestamp": "2025-08-27T09:17:50.302929"
+    }
+  }
+}

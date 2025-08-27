@@ -77,6 +77,24 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     event.target.value = '';
   };
 
+  // 저장된 청구서 결과 로드
+  const loadProcessedFiles = async () => {
+    try {
+      const response = await fetch('http://localhost:5001/api/get-processed-files');
+      const data = await response.json();
+      
+      if (response.ok && data.processed_files) {
+        // 저장된 결과를 회사별로 적용
+        setCompanies(prev => prev.map(company => ({
+          ...company,
+          processedFiles: data.processed_files[company.name]?.processed_files || []
+        })));
+      }
+    } catch (error) {
+      console.error('청구서 결과 로드 실패:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
@@ -142,6 +160,9 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
         
         // 통신비 정보도 함께 가져오기
         fetchBillAmounts();
+        
+        // 저장된 청구서 결과 로드
+        setTimeout(() => loadProcessedFiles(), 500); // 회사 설정 후 약간의 딜레이
       } catch (error) {
         console.error('고객사 목록 가져오기 실패:', error);
       }
@@ -300,9 +321,37 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     setFilePopup({ isOpen: false, companyName: '', files: [] });
   };
 
+  // 청구서 결과 초기화
+  const clearProcessedFiles = async (companyName) => {
+    try {
+      const response = await fetch('http://localhost:5001/api/clear-processed-files', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company_name: companyName })
+      });
+      
+      if (response.ok) {
+        // 프론트엔드 상태도 업데이트
+        setCompanies(prev => prev.map(comp => 
+          comp.name === companyName 
+            ? { ...comp, processedFiles: [] }
+            : comp
+        ));
+        console.log(`✅ ${companyName} 청구서 결과 초기화 완료`);
+      }
+    } catch (error) {
+      console.error('청구서 결과 초기화 실패:', error);
+    }
+  };
+
   const handleMultipleFileUpload = async (companyName, event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
+
+    // 새 파일 업로드 시 청구서 결과 초기화
+    await clearProcessedFiles(companyName);
 
     const company = companies.find(c => c.name === companyName);
     
@@ -364,14 +413,24 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
 
   const handleProcess = async (companyName) => {
     const company = companies.find(c => c.name === companyName);
-    const uploadedCount = company.uploadedFiles.filter(file => file).length;
     
-    // 디싸이더스는 최소 2개 이상, 다른 회사는 필수 개수 모두 필요
-    const minRequiredFiles = companyName === '디싸이더스/애드프로젝트' ? 2 : company.requiredFileCount;
-    
-    if (uploadedCount < minRequiredFiles) {
-      alert(`${companyName}는 최소 ${minRequiredFiles}개의 파일이 필요합니다. 현재 ${uploadedCount}개 업로드됨.`);
-      return;
+    // SK일렉링크는 고지서 업로드 여부만 확인
+    if (companyName === 'SK일렉링크') {
+      if (!company.billAmount) {
+        alert('SK일렉링크는 고지서가 업로드되어야 전처리가 가능합니다.');
+        return;
+      }
+    } else {
+      // 다른 회사들은 기존 로직 적용
+      const uploadedCount = company.uploadedFiles.filter(file => file).length;
+      
+      // 디싸이더스는 최소 2개 이상, 다른 회사는 필수 개수 모두 필요
+      const minRequiredFiles = companyName === '디싸이더스/애드프로젝트' ? 2 : company.requiredFileCount;
+      
+      if (uploadedCount < minRequiredFiles) {
+        alert(`${companyName}는 최소 ${minRequiredFiles}개의 파일이 필요합니다. 현재 ${uploadedCount}개 업로드됨.`);
+        return;
+      }
     }
 
     setCompanies(prev => prev.map(comp => 
@@ -674,10 +733,13 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
                   <button
                     onClick={() => handleProcess(company.name)}
                     disabled={
-                      (company.name === '디싸이더스/애드프로젝트' 
-                        ? company.uploadedFiles.filter(file => file).length < 2 
-                        : company.uploadedFiles.filter(file => file).length < company.requiredFileCount
-                      ) || company.processing
+                      company.processing || (
+                        company.name === 'SK일렉링크'
+                          ? !company.billAmount  // SK일렉링크는 고지서 업로드 여부만 확인
+                          : company.name === '디싸이더스/애드프로젝트' 
+                            ? company.uploadedFiles.filter(file => file).length < 2 
+                            : company.uploadedFiles.filter(file => file).length < company.requiredFileCount
+                      )
                     }
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
                   >
