@@ -54,9 +54,9 @@ function App() {
           />
         );
       case 'tax-invoice':
-        return <TaxInvoicePage onBack={() => setCurrentPage('billing')} />;
+        return <TaxInvoicePage onBack={() => setCurrentPage('billing')} user={user} />;
       case 'auto-expense':
-        return <AutoExpensePage onBack={() => setCurrentPage('billing')} />;
+        return <AutoExpensePage onBack={() => setCurrentPage('billing')} user={user} />;
       default:
         return (
           <BillingAutomationAdmin 

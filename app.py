@@ -7,12 +7,17 @@ import uuid
 import traceback
 from pathlib import Path
 import json
+import tempfile
 
 # 크롤링 모듈들 import
 from backend.data_collection.database import DatabaseManager
 from backend.data_collection.login_manager import LoginManager
 from backend.data_collection.data_manager import DataManager
 from backend.data_collection.new_admin_manager import NewAdminManager
+
+# 지출결의서 자동화 모듈들 import
+from backend.expense_automation.data_processor import ExpenseDataProcessor
+from backend.expense_automation.groupware_bot import GroupwareAutomation
 from backend.data_collection.config import DateConfig, AccountConfig, ElementConfig
 from backend.preprocessing.anhous_preprocessing import EnhancedAnhousePreprocessor
 from backend.preprocessing.kolon_preprocessing import KolonPreprocessor
@@ -789,6 +794,99 @@ def clear_company_processed_files():
         return jsonify({"message": f"{company_name} 청구서 결과 초기화 완료"})
         
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/expense-automation', methods=['POST'])
+def expense_automation():
+    """지출결의서 자동화 실행"""
+    try:
+        # 파일 업로드 확인
+        if 'file' not in request.files:
+            return jsonify({"error": "파일이 업로드되지 않았습니다"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "파일이 선택되지 않았습니다"}), 400
+        
+        # 파라미터 받기
+        category = request.form.get('category', '해외결제 법인카드')
+        start_date = request.form.get('start_date', '')
+        end_date = request.form.get('end_date', '')
+        user_id = request.form.get('user_id', '')
+        password = request.form.get('password', '')
+        
+        # 필수 파라미터 검증
+        if not all([start_date, end_date, user_id, password]):
+            return jsonify({"error": "필수 파라미터가 누락되었습니다"}), 400
+        
+        # 날짜 형식 검증
+        if len(start_date) != 8 or len(end_date) != 8:
+            return jsonify({"error": "날짜 형식이 올바르지 않습니다 (YYYYMMDD)"}), 400
+        
+        # 임시 파일로 저장
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, file.filename)
+        file.save(file_path)
+        
+        try:
+            # 데이터 처리
+            print(f"📊 지출결의서 자동화 시작: {file.filename}")
+            data_processor = ExpenseDataProcessor()
+            
+            # 파일 로드
+            data = data_processor.load_file(file_path)
+            print(f"✅ 파일 로드 완료: {len(data)}개 레코드")
+            
+            # 데이터 처리
+            processed_data = data_processor.process_data(data, category, start_date, end_date)
+            print(f"✅ 데이터 처리 완료: {len(processed_data)}개 레코드")
+            
+            if not processed_data:
+                return jsonify({"error": "처리할 데이터가 없습니다"}), 400
+            
+            # 그룹웨어 자동화 실행
+            automation = GroupwareAutomation()
+            
+            def progress_callback(message):
+                print(f"📈 진행상황: {message}")
+            
+            automation.run_automation(
+                processed_data=processed_data,
+                progress_callback=progress_callback,
+                user_id=user_id,
+                password=password
+            )
+            
+            print("🎉 지출결의서 자동화 완료!")
+            
+            return jsonify({
+                "success": True,
+                "message": "지출결의서 자동입력이 완료되었습니다",
+                "processed_count": len(processed_data),
+                "total_count": len(data)
+            })
+            
+        except Exception as e:
+            print(f"❌ 자동화 실행 오류: {e}")
+            print(f"❌ 상세 오류: {traceback.format_exc()}")
+            return jsonify({
+                "success": False,
+                "error": f"자동화 실행 중 오류가 발생했습니다: {str(e)}"
+            }), 500
+            
+        finally:
+            # 임시 파일 정리
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                if os.path.exists(temp_dir):
+                    os.rmdir(temp_dir)
+            except:
+                pass
+                
+    except Exception as e:
+        print(f"❌ API 오류: {e}")
+        print(f"❌ 상세 오류: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
