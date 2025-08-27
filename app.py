@@ -17,6 +17,7 @@ from backend.data_collection.config import DateConfig, AccountConfig, ElementCon
 from backend.preprocessing.anhous_preprocessing import EnhancedAnhousePreprocessor
 from backend.preprocessing.kolon_preprocessing import KolonPreprocessor
 from backend.preprocessing.sk_preprocessing import SKElectlinkPreprocessor
+from backend.preprocessing.deciders_preprocessing import DecidersPreprocessor
 from backend.preprocessing.bill_processor import BillProcessor
 from backend.storage.admin_storage import AdminStorage
 
@@ -346,23 +347,44 @@ def upload_file():
                 download_dir = str(Path.home() / "Downloads")
                 source_path = os.path.join(download_dir, collected_filename)
                 
+                # 파일 존재 여부와 접근 가능성 확인
                 if not os.path.exists(source_path):
                     return jsonify({"error": f"파일을 찾을 수 없습니다: {collected_filename}"}), 404
+                
+                if not os.path.isfile(source_path):
+                    return jsonify({"error": f"유효하지 않은 파일입니다: {collected_filename}"}), 400
+                
+                if not os.access(source_path, os.R_OK):
+                    return jsonify({"error": f"파일 읽기 권한이 없습니다: {collected_filename}"}), 403
                 
                 # 임시 폴더 생성 (전처리 후 자동 삭제)
                 temp_dir = "temp_processing"
                 os.makedirs(temp_dir, exist_ok=True)
                 
-                # 파일명 생성
+                # 파일명 생성 (슬래시 제거)
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"{company_name}_{file_label}_{timestamp}_{collected_filename}"
+                safe_company_name = company_name.replace('/', '')  # 슬래시 제거해서 이어붙이기
+                filename = f"{safe_company_name}_{file_label}_{timestamp}_{collected_filename}"
                 filepath = os.path.join(temp_dir, filename)
+                
+                # 중복 처리 방지: 이미 같은 파일이 있으면 건너뛰기
+                if os.path.exists(filepath):
+                    print(f"⚠️ 이미 존재하는 파일 건너뛰기: {filename}")
+                    return jsonify({
+                        "filename": filename, 
+                        "file_index": int(file_index),
+                        "file_label": file_label,
+                        "message": "이미 업로드된 파일입니다"
+                    })
                 
                 # 파일 복사
                 import shutil
-                shutil.copy2(source_path, filepath)
-                
-                print(f"📁 자동 업로드: {filename} (인덱스: {file_index}, 라벨: {file_label})")
+                try:
+                    shutil.copy2(source_path, filepath)
+                except FileNotFoundError:
+                    return jsonify({"error": f"원본 파일을 찾을 수 없습니다: {collected_filename}"}), 404
+                except Exception as e:
+                    return jsonify({"error": f"파일 복사 중 오류: {str(e)}"}), 500
                 
                 return jsonify({
                     "filename": filename, 
@@ -382,13 +404,14 @@ def upload_file():
         temp_dir = "temp_processing"
         os.makedirs(temp_dir, exist_ok=True)
         
-        # 파일 저장 (파일 인덱스와 라벨 포함)
+        # 파일 저장 (파일 인덱스와 라벨 포함, 슬래시 제거)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{company_name}_{file_label}_{timestamp}_{file.filename}"
+        safe_company_name = company_name.replace('/', '')  # 슬래시 제거해서 이어붙이기
+        filename = f"{safe_company_name}_{file_label}_{timestamp}_{file.filename}"
         filepath = os.path.join(temp_dir, filename)
         file.save(filepath)
         
-        print(f"📁 파일 업로드: {filename} (인덱스: {file_index}, 라벨: {file_label})")
+
         
         return jsonify({
             "filename": filename, 
@@ -398,9 +421,7 @@ def upload_file():
         })
         
     except Exception as e:
-        print(f"❌ 업로드 오류: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 
 @app.route('/api/auto-upload', methods=['POST'])
@@ -423,7 +444,7 @@ def auto_upload():
         if not os.path.exists(source_path):
             return jsonify({"error": f"파일을 찾을 수 없습니다: {collected_filename}"}), 404
         
-        print(f"📁 자동 업로드 확인: {collected_filename}")
+
         
         return jsonify({
             "filename": collected_filename,
@@ -433,7 +454,6 @@ def auto_upload():
         })
         
     except Exception as e:
-        print(f"❌ 자동 업로드 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/download/<filename>', methods=['GET'])
@@ -446,18 +466,11 @@ def download_file(filename):
         download_dir = str(Path.home() / "Downloads")
         file_path = os.path.join(download_dir, filename)
         
-        print(f"🔍 파일 찾기: {file_path}")
-        
         if not os.path.exists(file_path):
-            print(f"❌ 파일을 찾을 수 없습니다: {file_path}")
             return jsonify({"error": f"파일을 찾을 수 없습니다: {filename}"}), 404
-        
-        # 로컬 파일 직접 다운로드
-        print(f"✅ 파일 발견: {file_path}")
         return send_file(file_path, as_attachment=True, download_name=filename)
         
     except Exception as e:
-        print(f"❌ 다운로드 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -610,6 +623,23 @@ def process_file():
 
         elif company_name == "매스프레소(콴다)":
             processed_files = bill_processor.process_mathpresso(collection_date)
+            
+            if processed_files:
+                # 결과 저장
+                save_processed_files(company_name, processed_files)
+                
+                return jsonify({
+                    "message": "전처리 완료",
+                    "company": company_name,
+                    "processed_files": processed_files
+                })
+            else:
+                return jsonify({"error": "전처리 실패"}), 500
+
+        elif company_name == "디싸이더스/애드프로젝트":
+            # 디싸이더스/애드프로젝트 전용 전처리
+            preprocessor = DecidersPreprocessor()
+            processed_files = preprocessor.process_deciders_data(collection_date)
             
             if processed_files:
                 # 결과 저장

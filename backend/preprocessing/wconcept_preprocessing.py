@@ -59,11 +59,20 @@ class WConceptPreprocessor:
             return None
     
     def update_wconcept_template(self, template_path, license_count, collection_date):
-        """wconcept.xlsx 템플릿 파일 업데이트"""
+        """wconcept.xlsx 템플릿 파일 업데이트 (W컨셉은 전달 청구서)"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
-            year_month = f"{date_obj.year}년 {date_obj.month:02d}월"
-            date_prefix = f"{str(date_obj.year)[2:]}{date_obj.month:02d}"
+            
+            # W컨셉은 n-1월로 처리 (전달 청구서)
+            if date_obj.month == 1:
+                prev_year = date_obj.year - 1
+                prev_month = 12
+            else:
+                prev_year = date_obj.year
+                prev_month = date_obj.month - 1
+            
+            year_month = f"{prev_year}년 {prev_month:02d}월"
+            date_prefix = f"{str(prev_year)[2:]}{prev_month:02d}"
             
             # 출력 파일명 생성
             output_filename = f"{date_prefix}_W컨셉_청구내역서.xlsx"
@@ -92,7 +101,9 @@ class WConceptPreprocessor:
                 b16_cell = doc_sheet.cell(row=16, column=2)
                 if b16_cell.value and isinstance(b16_cell.value, str):
                     old_text = b16_cell.value
-                    new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
+                    new_text = re.sub(r'2025년\d{1,2}월', year_month, old_text)
+                    if new_text == old_text:
+                        new_text = re.sub(r'\d{4}년\d{1,2}월', year_month, old_text)
                     b16_cell.value = new_text
                     print(f"✅ 대외공문 B16 셀 업데이트: {old_text} → {new_text}")
                 

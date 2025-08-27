@@ -172,10 +172,19 @@ class BillProcessor:
             success = preprocessor.process_wconcept_data(collection_date, license_count)
             
             if success:
-                # 성공 시 다운로드 폴더에서 생성된 파일 찾기
+                # 성공 시 다운로드 폴더에서 생성된 파일 찾기 (W컨셉은 n-1월 파일명)
                 download_dir = str(Path.home() / "Downloads")
                 date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
-                date_prefix = f"{str(date_obj.year)[2:]}{date_obj.month:02d}"
+                
+                # W컨셉은 n-1월로 파일명 생성
+                if date_obj.month == 1:
+                    prev_year = date_obj.year - 1
+                    prev_month = 12
+                else:
+                    prev_year = date_obj.year
+                    prev_month = date_obj.month - 1
+                
+                date_prefix = f"{str(prev_year)[2:]}{prev_month:02d}"
                 expected_filename = f"{date_prefix}_W컨셉_청구내역서.xlsx"
                 expected_path = os.path.join(download_dir, expected_filename)
                 

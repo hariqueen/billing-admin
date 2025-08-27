@@ -421,7 +421,9 @@ class EnhancedAnhousePreprocessor:
                 b16_cell = doc_sheet.cell(row=16, column=2)
                 if b16_cell.value and isinstance(b16_cell.value, str):
                     old_text = b16_cell.value
-                    new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
+                    new_text = re.sub(r'2025년\d{1,2}월', year_month, old_text)
+                    if new_text == old_text:
+                        new_text = re.sub(r'\d{4}년\d{1,2}월', year_month, old_text)
                     if new_text != old_text:
                         b16_cell.value = new_text
                         print(f"   📝 대외공문 B16 셀 변경: {old_text} → {new_text}")

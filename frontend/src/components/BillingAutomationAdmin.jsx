@@ -237,8 +237,8 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
               : company
           ));
           
-          // 앤하우스, 디싸이더스/애드플젝, 매스프레소(콴다)인 경우 수집된 파일들을 자동으로 업로드
-          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드플젝' || companyName === '매스프레소(콴다)') && status.files && status.files.length > 0) {
+          // 앤하우스, 디싸이더스/애드프로젝트, 매스프레소(콴다)인 경우 수집된 파일들을 자동으로 업로드
+          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)') && status.files && status.files.length > 0) {
             autoUploadCollectedFiles(companyName, status.files);
           }
         } else if (status.status === 'failed') {
@@ -270,6 +270,15 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
       const company = companies.find(c => c.name === companyName);
       const uploadedFiles = [];
       
+      // 중복 업로드 방지: 이미 업로드된 파일이 있으면 건너뛰기
+      const existingUploads = company.uploadedFiles.filter(file => file).length;
+      if (existingUploads > 0) {
+        console.log(`⚠️ ${companyName}는 이미 ${existingUploads}개 파일이 업로드되어 있어 자동 업로드를 건너뜁니다.`);
+        return;
+      }
+      
+      console.log(`🚀 ${companyName} 자동 업로드 시작: ${collectedFiles.length}개 파일`);
+      
       for (let i = 0; i < Math.min(collectedFiles.length, company.requiredFileCount); i++) {
         const filename = collectedFiles[i];
         const fileLabel = company.fileLabels[i];
@@ -292,9 +301,11 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
           if (response.ok) {
             uploadedFiles[i] = result.filename;
             console.log(`✅ 자동 업로드 완료: ${filename} -> ${result.filename}`);
+          } else {
+            console.error(`❌ 자동 업로드 실패 (${filename}):`, result.error);
           }
         } catch (error) {
-          console.error(`자동 업로드 오류:`, error);
+          console.error(`❌ 자동 업로드 오류 (${filename}):`, error);
         }
       }
       
@@ -343,6 +354,55 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     const { companyName, licenseCount } = licensePopup;
     closeLicensePopup();
     await handleProcess(companyName, licenseCount);
+  };
+
+  // W컨셉 전용 알림창 표시 (자동 사라짐)
+  const showWConceptNotification = () => {
+    // 알림 요소 생성
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #10b981;
+      color: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 9999;
+      font-size: 16px;
+      font-weight: 500;
+      text-align: center;
+      max-width: 400px;
+      animation: fadeInOut 3s ease-in-out;
+    `;
+    notification.textContent = 'W컨셉은 고객사의 요청으로 전 달 청구서로 발행됩니다.';
+
+    // CSS 애니메이션 추가
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes fadeInOut {
+        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // DOM에 추가
+    document.body.appendChild(notification);
+
+    // 3초 후 자동 제거
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+      if (style.parentNode) {
+        style.parentNode.removeChild(style);
+      }
+    }, 3000);
   };
 
   // 청구서 결과 초기화
@@ -493,6 +553,11 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
             ? { ...comp, processing: false, processedFiles: result.processed_files || [] }
             : comp
         ));
+
+        // W컨셉인 경우 특별 알림창 표시
+        if (companyName === 'W컨셉') {
+          showWConceptNotification();
+        }
       } else {
         console.error(`❌ ${companyName} 전처리 실패:`, result.error);
         alert(`전처리 실패: ${result.error}`);
@@ -656,7 +721,7 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
             </div>
             
             {/* 업로드 헤더 */}
-            <div className="col-span-2 text-center">
+            <div className="col-span-2 text-center">ㄴ
               <span>업로드</span>
             </div>
             
@@ -690,7 +755,14 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
                         수집중
                       </div>
                     ) : (
-                      company.name
+                      company.name === '디싸이더스/애드프로젝트' ? (
+                        <div className="text-center">
+                          <div>디싸이더스</div>
+                          <div>애드프로젝트</div>
+                        </div>
+                      ) : (
+                        company.name
+                      )
                     )}
                   </button>
                 </div>
