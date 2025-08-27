@@ -1,12 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Upload, Play, Loader2, Settings } from 'lucide-react';
-import AccountManager from './AccountManager';
+import { Download, Upload, Play, Loader2 } from 'lucide-react';
 
-const BillingAutomationAdmin = ({ user, onLogout }) => {
-  const [dateRange, setDateRange] = useState({
-    startDate: '2025-05-01',
-    endDate: '2025-05-31'
-  });
+// 한 달 전 1일부터 말일까지 날짜 계산 함수
+const getPreviousMonthRange = () => {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth(); // 0-based (8월 = 7)
+  
+  // 한 달 전 계산
+  let prevYear = currentYear;
+  let prevMonth = currentMonth - 1;
+  
+  if (prevMonth < 0) {
+    prevMonth = 11;
+    prevYear = currentYear - 1;
+  }
+  
+  // 한 달 전 1일 (로컬 시간대로 계산)
+  const startDateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
+  
+  // 한 달 전 말일 (다음 달 0일 = 이번 달 마지막 날)
+  const endDate = new Date(prevYear, prevMonth + 1, 0);
+  const endDateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+  
+  console.log(`현재: ${currentYear}년 ${currentMonth + 1}월`);
+  console.log(`한 달 전: ${prevYear}년 ${prevMonth + 1}월`);
+  console.log(`계산된 범위: ${startDateStr} ~ ${endDateStr}`);
+  
+  return {
+    startDate: startDateStr,
+    endDate: endDateStr
+  };
+};
+
+const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
+  const [dateRange, setDateRange] = useState(getPreviousMonthRange());
 
   const [filePopup, setFilePopup] = useState({
     isOpen: false,
@@ -20,10 +48,9 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     licenseCount: 40
   });
 
-  const [showAccountManager, setShowAccountManager] = useState(false);
+
 
   const [companies, setCompanies] = useState([]);
-  const [billAmounts, setBillAmounts] = useState({});
   const [isUploading, setIsUploading] = useState(false);
 
   // 고객사 목록 가져오기
@@ -32,7 +59,6 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     try {
       const response = await fetch('http://localhost:5001/api/bill-amounts');
       const data = await response.json();
-      setBillAmounts(data);
       
       // 회사 정보 업데이트
       setCompanies(prev => prev.map(company => ({
@@ -192,17 +218,23 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     ));
 
     try {
-      // Python 백엔드 API 호출
+      // Python 백엔드 API 호출 (날짜가 선택되지 않은 경우 빈 값으로 전송하여 백엔드에서 기본값 사용)
+      const requestBody = {
+        company_name: companyName
+      };
+      
+      // 날짜가 선택된 경우에만 전송
+      if (dateRange.startDate && dateRange.endDate) {
+        requestBody.start_date = dateRange.startDate;
+        requestBody.end_date = dateRange.endDate;
+      }
+      
       const response = await fetch('http://localhost:5001/api/collect-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          company_name: companyName,
-          start_date: dateRange.startDate,
-          end_date: dateRange.endDate
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const result = await response.json();
@@ -615,10 +647,7 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
     }
   };
 
-  // 계정관리 화면이 활성화된 경우
-  if (showAccountManager) {
-    return <AccountManager onBack={() => setShowAccountManager(false)} />;
-  }
+
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -672,13 +701,7 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
                 />
               </div>
             </div>
-            <button
-              onClick={() => setShowAccountManager(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors"
-            >
-              <Settings className="w-4 h-4" />
-              계정관리
-            </button>
+
           </div>
         </div>
 
@@ -721,7 +744,7 @@ const BillingAutomationAdmin = ({ user, onLogout }) => {
             </div>
             
             {/* 업로드 헤더 */}
-            <div className="col-span-2 text-center">ㄴ
+            <div className="col-span-2 text-center">
               <span>업로드</span>
             </div>
             

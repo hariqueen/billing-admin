@@ -7,15 +7,27 @@ const AccountManager = ({ onBack }) => {
   const [saving, setSaving] = useState(false);
   const [showPasswords, setShowPasswords] = useState({});
   const [editingAccount, setEditingAccount] = useState(null);
+  const [viewType, setViewType] = useState('project'); // 'project' 또는 'llm'
   const [newAccount, setNewAccount] = useState({
     company_name: '',
     account_type: 'sms',
     url: '',
     username: '',
     password: '',
-    notes: '',
     status: 'active'
   });
+
+  // 계정을 회사별로 그룹화하는 함수
+  const groupAccountsByCompany = (accounts) => {
+    const grouped = {};
+    accounts.forEach(account => {
+      if (!grouped[account.company_name]) {
+        grouped[account.company_name] = [];
+      }
+      grouped[account.company_name].push(account);
+    });
+    return grouped;
+  };
 
   // Firebase에서 계정 정보 가져오기
   const fetchAccounts = async () => {
@@ -42,8 +54,7 @@ const AccountManager = ({ onBack }) => {
             site_url: 'https://ann.metaics.co.kr:8443/jsp/login.jsp',
             username: 'system',
             password: 'test1234@',
-            status: 'active',
-            notes: 'SMS 계정'
+            status: 'active'
           },
           {
             id: '2',
@@ -52,8 +63,7 @@ const AccountManager = ({ onBack }) => {
             site_url: 'https://ann.metahub.co.kr/',
             username: '16099',
             password: '16099',
-            status: 'active',
-            notes: 'CALL 계정'
+            status: 'active'
           },
           {
             id: '3',
@@ -62,8 +72,7 @@ const AccountManager = ({ onBack }) => {
             site_url: 'https://deciders.metahub.co.kr/jsp/login.jsp',
             username: 'system',
             password: 'test1234$',
-            status: 'active',
-            notes: 'SMS 계정'
+            status: 'active'
           }
         ];
         setAccounts(simulationData);
@@ -81,8 +90,7 @@ const AccountManager = ({ onBack }) => {
           site_url: 'https://ann.metaics.co.kr:8443/jsp/login.jsp',
           username: 'system',
           password: 'test1234@',
-          status: 'active',
-          notes: 'SMS 계정'
+          status: 'active'
         },
         {
           id: '2',
@@ -91,8 +99,7 @@ const AccountManager = ({ onBack }) => {
           site_url: 'https://ann.metahub.co.kr/',
           username: '16099',
           password: '16099',
-          status: 'active',
-          notes: 'CALL 계정'
+          status: 'active'
         }
       ];
       setAccounts(simulationData);
@@ -122,7 +129,6 @@ const AccountManager = ({ onBack }) => {
       url: '',
       username: '',
       password: '',
-      notes: '',
       status: 'active'
     });
   };
@@ -136,7 +142,6 @@ const AccountManager = ({ onBack }) => {
       url: account.site_url || account.url || '',
       username: account.username,
       password: account.password,
-      notes: account.notes || '',
       status: account.status || 'active'
     });
   };
@@ -192,7 +197,8 @@ const AccountManager = ({ onBack }) => {
           account_type: 'sms',
           url: '',
           username: '',
-          password: ''
+          password: '',
+          status: 'active'
         });
       } else {
         const error = await response.json();
@@ -215,7 +221,6 @@ const AccountManager = ({ onBack }) => {
       url: '',
       username: '',
       password: '',
-      notes: '',
       status: 'active'
     });
   };
@@ -258,113 +263,123 @@ const AccountManager = ({ onBack }) => {
         {/* 계정 목록 */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">등록된 계정 목록</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">등록된 계정 목록</h2>
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700">보기 방식:</label>
+                <select
+                  value={viewType}
+                  onChange={(e) => setViewType(e.target.value)}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="project">프로젝트 별</option>
+                  <option value="llm">LLM 계정 별</option>
+                </select>
+              </div>
+            </div>
           </div>
           
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    회사명
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    계정 타입
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    URL
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    사용자명
-                  </th>
-                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                     비밀번호
-                   </th>
-                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                     상태
-                   </th>
-                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                     메모
-                   </th>
-                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                     작업
-                   </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {accounts.map((account) => (
-                  <tr key={account.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {account.company_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        account.account_type === 'sms' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {account.account_type === 'sms' ? 'SMS' : 'CALL'}
-                      </span>
-                    </td>
-                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                       <div className="max-w-xs truncate" title={account.site_url || account.url}>
-                         {account.site_url || account.url}
-                       </div>
-                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {account.username}
-                    </td>
-                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                       <div className="flex items-center gap-2">
-                         <span>
-                           {showPasswords[account.id] ? account.password : '•'.repeat(8)}
-                         </span>
-                         <button
-                           onClick={() => togglePasswordVisibility(account.id)}
-                           className="text-gray-400 hover:text-gray-600"
-                         >
-                           {showPasswords[account.id] ? (
-                             <EyeOff className="w-4 h-4" />
-                           ) : (
-                             <Eye className="w-4 h-4" />
-                           )}
-                         </button>
-                       </div>
-                     </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                       <span className={`px-2 py-1 text-xs rounded-full ${
-                         account.status === 'active' 
-                           ? 'bg-green-100 text-green-800' 
-                           : 'bg-red-100 text-red-800'
-                       }`}>
-                         {account.status === 'active' ? '활성' : '비활성'}
-                       </span>
-                     </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                       <div className="max-w-xs truncate" title={account.notes || ''}>
-                         {account.notes || '-'}
-                       </div>
-                     </td>
-                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                       <div className="flex items-center gap-2">
-                         <button
-                           onClick={() => handleEditAccount(account)}
-                           className="text-blue-600 hover:text-blue-800"
-                         >
-                           수정
-                         </button>
-                         <button
-                           onClick={() => handleDeleteAccount(account.id)}
-                           className="text-red-600 hover:text-red-800"
-                         >
-                           <Trash2 className="w-4 h-4" />
-                         </button>
-                       </div>
-                     </td>
+            {viewType === 'project' ? (
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      회사명
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      계정 타입
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      URL
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      비밀번호
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      상태
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      작업
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {Object.entries(groupAccountsByCompany(accounts)).map(([companyName, companyAccounts]) => (
+                    companyAccounts.map((account, index) => (
+                      <tr key={account.id} className={`hover:bg-gray-50 ${index === 0 ? 'border-t-2 border-gray-300' : ''}`}>
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 ${index === 0 ? 'bg-gray-50' : ''}`}>
+                          {index === 0 ? companyName : ''}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            account.account_type === 'sms' 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {account.account_type === 'sms' ? 'SMS' : 'CALL'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="max-w-xs truncate" title={account.site_url || account.url}>
+                            {account.site_url || account.url}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {account.username}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center gap-2">
+                            <span>
+                              {showPasswords[account.id] ? account.password : '••••••••'}
+                            </span>
+                            <button
+                              onClick={() => togglePasswordVisibility(account.id)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              {showPasswords[account.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            account.status === 'active' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {account.status === 'active' ? '활성' : '비활성'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEditAccount(account)}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              수정
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAccount(account.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="p-8 text-center text-gray-500">
+                <p>LLM 계정 목록이 여기에 표시됩니다.</p>
+                <p className="text-sm mt-2">현재 LLM 계정이 등록되어 있지 않습니다.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -381,13 +396,23 @@ const AccountManager = ({ onBack }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     회사명 *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={newAccount.company_name}
                     onChange={(e) => setNewAccount(prev => ({ ...prev, company_name: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="회사명을 입력하세요"
-                  />
+                  >
+                    <option value="">회사명을 선택하세요</option>
+                    <option value="앤하우스">앤하우스</option>
+                    <option value="디싸이더스/애드프로젝트">디싸이더스/애드프로젝트</option>
+                    <option value="매스프레소(콴다)">매스프레소(콴다)</option>
+                    <option value="SK일렉링크">SK일렉링크</option>
+                    <option value="코오롱Fnc">코오롱Fnc</option>
+                    <option value="W컨셉">W컨셉</option>
+                    <option value="메디빌더">메디빌더</option>
+                    <option value="구쁘">구쁘</option>
+                    <option value="볼드워크">볼드워크</option>
+                    <option value="코오롱">코오롱</option>
+                  </select>
                 </div>
 
                 <div>
@@ -419,14 +444,14 @@ const AccountManager = ({ onBack }) => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    사용자명 *
+                    ID *
                   </label>
                   <input
                     type="text"
                     value={newAccount.username}
                     onChange={(e) => setNewAccount(prev => ({ ...prev, username: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="사용자명을 입력하세요"
+                    placeholder="ID를 입력하세요"
                   />
                 </div>
 
@@ -457,18 +482,7 @@ const AccountManager = ({ onBack }) => {
                    </select>
                  </div>
 
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                     메모
-                   </label>
-                   <textarea
-                     value={newAccount.notes}
-                     onChange={(e) => setNewAccount(prev => ({ ...prev, notes: e.target.value }))}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                     placeholder="메모를 입력하세요"
-                     rows="3"
-                   />
-                 </div>
+
                </div>
 
               <div className="flex justify-end gap-3 mt-6">
