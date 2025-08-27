@@ -1,6 +1,30 @@
 from datetime import datetime, timedelta
 from selenium.webdriver.common.keys import Keys
 
+def get_previous_month_range():
+    """현재 날짜 기준으로 한 달 전 1일부터 말일까지 날짜 계산"""
+    today = datetime.now()
+    current_year = today.year
+    current_month = today.month
+    
+    # 한 달 전 계산
+    if current_month == 1:
+        prev_year = current_year - 1
+        prev_month = 12
+    else:
+        prev_year = current_year
+        prev_month = current_month - 1
+    
+    # 한 달 전 1일
+    start_date = datetime(prev_year, prev_month, 1)
+    # 한 달 전 말일
+    end_date = datetime(prev_year, prev_month + 1, 1) - timedelta(days=1)
+    
+    return {
+        "start_date": start_date.strftime("%Y-%m-%d"),
+        "end_date": end_date.strftime("%Y-%m-%d")
+    }
+
 class ElementConfig:
     """요소 관련 설정"""
     
@@ -128,6 +152,24 @@ class DateConfig:
         """날짜 설정"""
         cls._start_date = start_date
         cls._end_date = end_date
+    
+    @classmethod
+    def set_default_dates(cls):
+        """기본 날짜 설정 (한 달 전 1일부터 말일까지)"""
+        date_range = get_previous_month_range()
+        cls._start_date = date_range["start_date"]
+        cls._end_date = date_range["end_date"]
+        print(f"📅 기본 날짜 설정: {cls._start_date} ~ {cls._end_date}")
+    
+    @classmethod
+    def get_dates(cls):
+        """현재 설정된 날짜 반환 (설정되지 않은 경우 기본값으로 설정)"""
+        if cls._start_date is None or cls._end_date is None:
+            cls.set_default_dates()
+        return {
+            "start_date": cls._start_date,
+            "end_date": cls._end_date
+        }
     
     @classmethod
     def get_sms_format(cls):

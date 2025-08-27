@@ -100,9 +100,14 @@ def collect_data():
                 # 실제 크롤링 실행
                 task_status[task_id]["log"].append("🌐 실제 크롤링 모드로 실행")
                 
-                # 날짜 설정
-                DateConfig.set_dates(start_date, end_date)
-                task_status[task_id]["log"].append(f"📅 날짜 설정: {start_date} ~ {end_date}")
+                # 날짜 설정 (제공되지 않은 경우 기본값 사용)
+                if start_date and end_date:
+                    DateConfig.set_dates(start_date, end_date)
+                    task_status[task_id]["log"].append(f"📅 날짜 설정: {start_date} ~ {end_date}")
+                else:
+                    DateConfig.set_default_dates()
+                    dates = DateConfig.get_dates()
+                    task_status[task_id]["log"].append(f"📅 기본 날짜 설정: {dates['start_date']} ~ {dates['end_date']}")
                 
                 # 1단계: SMS 계정 로그인 및 데이터 수집
                 task_status[task_id]["progress"] = 20
@@ -713,6 +718,61 @@ def get_processed_files():
         processed_files = admin_storage.get_processed_files()
         return jsonify({"processed_files": processed_files})
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/accounts', methods=['GET'])
+def get_accounts():
+    """Firebase에서 모든 계정 정보 조회"""
+    try:
+        accounts = db_manager.get_all_accounts()
+        return jsonify({"accounts": accounts})
+    except Exception as e:
+        print(f"❌ 계정 정보 조회 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/accounts/<account_id>', methods=['GET'])
+def get_account(account_id):
+    """특정 계정 정보 조회"""
+    try:
+        account = db_manager.get_account_by_id(account_id)
+        if account:
+            return jsonify(account)
+        else:
+            return jsonify({"error": "계정을 찾을 수 없습니다"}), 404
+    except Exception as e:
+        print(f"❌ 계정 정보 조회 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/accounts', methods=['POST'])
+def create_account():
+    """새 계정 생성"""
+    try:
+        data = request.get_json()
+        account_id = db_manager.add_account(data)
+        return jsonify({"message": "계정이 생성되었습니다", "account_id": account_id}), 201
+    except Exception as e:
+        print(f"❌ 계정 생성 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/accounts/<account_id>', methods=['PUT'])
+def update_account(account_id):
+    """계정 정보 수정"""
+    try:
+        data = request.get_json()
+        db_manager.update_account(account_id, data)
+        return jsonify({"message": "계정이 수정되었습니다"})
+    except Exception as e:
+        print(f"❌ 계정 수정 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/accounts/<account_id>', methods=['DELETE'])
+def delete_account(account_id):
+    """계정 삭제"""
+    try:
+        db_manager.delete_account(account_id)
+        return jsonify({"message": "계정이 삭제되었습니다"})
+    except Exception as e:
+        print(f"❌ 계정 삭제 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clear-processed-files', methods=['POST'])

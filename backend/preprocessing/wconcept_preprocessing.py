@@ -58,7 +58,7 @@ class WConceptPreprocessor:
             print(f"❌ wconcept.xlsx 템플릿 다운로드 실패: {e}")
             return None
     
-    def update_wconcept_template(self, template_path, license_count, collection_date):
+    def update_wconcept_template(self, template_path, license_count, collection_date, bill_amount=None):
         """wconcept.xlsx 템플릿 파일 업데이트 (W컨셉은 전달 청구서)"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -127,12 +127,23 @@ class WConceptPreprocessor:
                             print(f"✅ {year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
                     break
             
-            # 3. 세부내역 시트 업데이트 - D5 셀에 라이선스 수량 입력 (숫자만)
+            # 3. 세부내역 시트 업데이트
             if '세부내역' in workbook.sheetnames:
                 detail_sheet = workbook['세부내역']
                 # D5 셀에 라이선스 수량 입력 (숫자만)
                 detail_sheet.cell(row=5, column=4).value = license_count
                 print(f"✅ 세부내역 시트 D5 셀 업데이트: {license_count}개")
+                
+                # E17 셀에 고지서 금액에서 부가세 10% 제외한 금액 입력
+                if bill_amount:
+                    # 고지서 금액에서 숫자만 추출 (예: "862,120원" → 862120)
+                    amount_str = re.sub(r'[^\d]', '', bill_amount)
+                    if amount_str:
+                        total_amount = int(amount_str)
+                        # 부가세 10% 제외한 금액 계산 (부가세 포함 금액 ÷ 1.1)
+                        net_amount = int(total_amount / 1.1)
+                        detail_sheet.cell(row=17, column=5).value = net_amount
+                        print(f"✅ 세부내역 시트 E17 셀 업데이트: {net_amount:,}원 (고지서: {total_amount:,}원, 부가세 제외)")
             
             # 파일 저장
             workbook.save(output_path)
@@ -173,14 +184,25 @@ class WConceptPreprocessor:
             print("🚀 W컨셉 데이터 전처리 시작")
             print(f"📊 청구 라이선스 수량: {license_count}개")
             
+            # 고지서 금액 조회
+            from ..storage.admin_storage import AdminStorage
+            admin_storage = AdminStorage()
+            bill_amounts = admin_storage.get_bill_amounts()
+            bill_amount = bill_amounts.get("W컨셉", {}).get("amount")
+            
+            if bill_amount:
+                print(f"📊 W컨셉 고지서 금액: {bill_amount}")
+            else:
+                print("⚠️ W컨셉 고지서 금액을 찾을 수 없습니다")
+            
             # 1. wconcept.xlsx 템플릿 다운로드
             template_path = self.download_wconcept_template()
             if template_path is None:
                 print("❌ wconcept.xlsx 템플릿 다운로드 실패")
                 return False
             
-            # 2. 템플릿 업데이트 및 청구서 생성
-            final_invoice_path = self.update_wconcept_template(template_path, license_count, collection_date)
+            # 2. 템플릿 업데이트 및 청구서 생성 (고지서 금액 포함)
+            final_invoice_path = self.update_wconcept_template(template_path, license_count, collection_date, bill_amount)
             if final_invoice_path is None:
                 print("❌ W컨셉 청구서 생성 실패")
                 return False
