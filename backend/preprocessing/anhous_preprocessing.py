@@ -3,15 +3,15 @@ import re
 import shutil
 import pandas as pd
 from datetime import datetime
+from pathlib import Path
 from openpyxl import load_workbook
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
 
 class AnhousPreprocessor:
-    def __init__(self, download_dir="downloads"):
-        self.download_dir = download_dir
-        os.makedirs(download_dir, exist_ok=True)
+    def __init__(self):
+        self.download_dir = str(Path.home() / "Downloads")
         self.setup_firebase()
     
     def setup_firebase(self):
