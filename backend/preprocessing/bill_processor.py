@@ -12,7 +12,7 @@ import time
 from bs4 import BeautifulSoup
 from ..data_collection.config import AccountConfig
 from ..storage.admin_storage import AdminStorage
-from .wconcept_preprocessing import WConceptPreprocessor
+from .wconcept_preprocessing import WconceptPreprocessor
 from .mathpresso_preprocessing import MathpressoPreprocessor
 
 class BillProcessor:
@@ -168,7 +168,7 @@ class BillProcessor:
     def process_wconcept(self, collection_date, license_count=40):
         """W컨셉 전처리 처리"""
         try:
-            preprocessor = WConceptPreprocessor()
+            preprocessor = WconceptPreprocessor()
             success = preprocessor.process_wconcept_data(collection_date, license_count)
             
             if success:

@@ -19,9 +19,9 @@ from backend.data_collection.new_admin_manager import NewAdminManager
 from backend.expense_automation.data_processor import ExpenseDataProcessor
 from backend.expense_automation.groupware_bot import GroupwareAutomation
 from backend.data_collection.config import DateConfig, AccountConfig, ElementConfig
-from backend.preprocessing.anhous_preprocessing import EnhancedAnhousePreprocessor
+from backend.preprocessing.anhous_preprocessing import AnhousPreprocessor
 from backend.preprocessing.kolon_preprocessing import KolonPreprocessor
-from backend.preprocessing.sk_preprocessing import SKElectlinkPreprocessor
+from backend.preprocessing.sk_preprocessing import SKPreprocessor
 from backend.preprocessing.deciders_preprocessing import DecidersPreprocessor
 from backend.preprocessing.bill_processor import BillProcessor
 from backend.storage.admin_storage import AdminStorage
@@ -500,7 +500,7 @@ def process_file():
         
         # 회사별 전처리 실행
         if company_name == "앤하우스":
-            preprocessor = EnhancedAnhousePreprocessor()
+            preprocessor = AnhousPreprocessor()
             success = preprocessor.process_anhous_data(collection_date)
             
             if success:
@@ -580,7 +580,7 @@ def process_file():
                 return jsonify({"error": "전처리 실패"}), 500
         
         elif company_name == "SK일렉링크":
-            preprocessor = SKElectlinkPreprocessor()
+            preprocessor = SKPreprocessor()
             success = preprocessor.process_sk_data(collection_date)
             
             if success:
