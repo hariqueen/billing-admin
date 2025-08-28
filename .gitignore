@@ -46,6 +46,9 @@ tmp/
 *.tmp
 *.temp
 
+# Temporary processing files
+temp_processing/
+
 # 패키징/배포 산출물
 *.egg-info/
 .eggs/

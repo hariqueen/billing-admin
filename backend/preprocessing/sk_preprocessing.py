@@ -47,7 +47,7 @@ class SKElectlinkPreprocessor:
         
         try:
             blob = self.bucket.blob("skelectlink.xlsx")
-            temp_dir = os.path.join(os.getcwd(), "temp_templates")
+            temp_dir = os.path.join(os.getcwd(), "temp_processing")
             os.makedirs(temp_dir, exist_ok=True)
             
             local_path = os.path.join(temp_dir, "skelectlink.xlsx")

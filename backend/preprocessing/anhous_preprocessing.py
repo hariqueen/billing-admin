@@ -152,22 +152,12 @@ class EnhancedAnhousePreprocessor:
         
         try:
             blob = self.bucket.blob(template_name)
-            temp_dir = os.path.join(os.getcwd(), "temp_templates")
+            temp_dir = os.path.join(os.getcwd(), "temp_processing")
             os.makedirs(temp_dir, exist_ok=True)
             
             local_path = os.path.join(temp_dir, template_name)
             blob.download_to_filename(local_path)
-            
-            # 템플릿 파일 구조 확인
-            from openpyxl import load_workbook
-            try:
-                workbook = load_workbook(local_path)
-                print(f"📋 템플릿 파일 구조 확인: {template_name}")
-                print(f"   시트 목록: {workbook.sheetnames}")
-                workbook.close()
-            except Exception as e:
-                print(f"❌ 템플릿 파일 구조 확인 실패: {e}")
-            
+            print(f"✅ {template_name} 템플릿 다운로드 완료: {local_path}")
             return local_path
         except Exception as e:
             print(f"❌ 템플릿 다운로드 실패: {e}")
