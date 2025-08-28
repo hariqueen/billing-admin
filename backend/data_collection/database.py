@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import firebase_admin
 from firebase_admin import credentials, firestore
+from backend.utils.secrets_manager import get_firebase_secret
 
 class DatabaseManager:
     """Firebase 데이터베이스 관리"""
@@ -14,13 +15,8 @@ class DatabaseManager:
     def _initialize_firebase(self):
         """Firebase 초기화"""
         if not firebase_admin._apps:
-            # 환경변수에서 전체 JSON 문자열 가져오기
-            firebase_json = os.getenv("FIREBASE_PRIVATE_KEY", "")
-            if not firebase_json:
-                raise ValueError("환경변수가 비어 있습니다.")
-            
-            # JSON 문자열 → 딕셔너리로 파싱
-            cred_dict = json.loads(firebase_json)
+            # AWS Secrets Manager에서 Firebase 키 가져오기
+            cred_dict = get_firebase_secret()
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
         

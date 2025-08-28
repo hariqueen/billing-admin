@@ -1,33 +1,27 @@
 import os
+import re
+import shutil
 import pandas as pd
 from datetime import datetime
-from io import StringIO
+from openpyxl import load_workbook
 import firebase_admin
 from firebase_admin import credentials, storage
+from backend.utils.secrets_manager import get_firebase_secret
 
-class EnhancedAnhousePreprocessor:
-    def __init__(self):
-        self.bucket = None
+class AnhousPreprocessor:
+    def __init__(self, download_dir="downloads"):
+        self.download_dir = download_dir
+        os.makedirs(download_dir, exist_ok=True)
         self.setup_firebase()
-        
-        # 팀별 파일 매핑
-        self.team_file_mapping = {
-            "CS팀": "annhouse_CS.xlsx",
-            "사업지원팀": "annhouse.xlsx", 
-            "엔하우스": "annhouse_TS.xlsx"
-        }
     
     def setup_firebase(self):
         """Firebase Storage 연결 설정"""
         try:
-            import os, json
             from dotenv import load_dotenv
             
-            # test.py와 완전히 동일한 방식
             load_dotenv()
-            cred_dict = json.loads(os.environ["FIREBASE_PRIVATE_KEY"])
+            cred_dict = get_firebase_secret()
             
-            # 정확한 버킷명 지정
             BUCKET_NAME = os.getenv("STORAGE_BUCKET", "services-e42af.firebasestorage.app")
             
             # 기존 앱이 있으면 삭제하고 새로 초기화

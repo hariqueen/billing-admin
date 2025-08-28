@@ -6,21 +6,21 @@ from openpyxl import load_workbook
 import re
 import firebase_admin
 from firebase_admin import credentials, storage
+from backend.utils.secrets_manager import get_firebase_secret
 
-class SKElectlinkPreprocessor:
-    def __init__(self):
-        self.download_dir = str(Path.home() / "Downloads")
-        self.bucket = None
+class SKPreprocessor:
+    def __init__(self, download_dir="downloads"):
+        self.download_dir = download_dir
+        os.makedirs(download_dir, exist_ok=True)
         self.setup_firebase()
     
     def setup_firebase(self):
         """Firebase Storage 연결 설정"""
         try:
-            import json
             from dotenv import load_dotenv
             
             load_dotenv()
-            cred_dict = json.loads(os.environ["FIREBASE_PRIVATE_KEY"])
+            cred_dict = get_firebase_secret()
             
             BUCKET_NAME = os.getenv("STORAGE_BUCKET", "services-e42af.firebasestorage.app")
             
