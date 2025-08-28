@@ -96,7 +96,7 @@ const AutoExpensePage = ({ onBack, user }) => {
       formData.append('user_id', user?.username || '');
       formData.append('password', user?.password || '');
       
-      const response = await fetch('http://localhost:5001/api/expense-automation', {
+      const response = await fetch('http://13.125.245.229:5000/api/expense-automation', {
         method: 'POST',
         body: formData
       });

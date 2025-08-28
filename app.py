@@ -44,7 +44,7 @@ task_status = {}
 print("🚀 청구자동화 API 서버 시작")
 print("🔧 모드: 실제 크롤링")
 print("📍 Frontend: http://localhost:3000")
-print("📍 Backend API: http://localhost:5001")
+print("📍 Backend API: http://localhost:5000")
 
 @app.route('/api/companies', methods=['GET'])
 def get_companies():
@@ -890,4 +890,4 @@ def expense_automation():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=False)
