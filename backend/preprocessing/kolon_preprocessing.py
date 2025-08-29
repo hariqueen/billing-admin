@@ -377,20 +377,33 @@ class KolonPreprocessor:
                 workbook.close()
     
     def calculate_amount_without_vat(self, total_amount):
-        """부가세 10%를 제외한 금액 계산"""
+        """부가세 10%를 제외한 금액 계산 (1원 오차 보정 포함)"""
         try:
             # 부가세 포함 금액에서 부가세 제외
             # 총금액 = 공급가액 + 부가세(공급가액의 10%)
             # 총금액 = 공급가액 × 1.1
             # 공급가액 = 총금액 / 1.1
-            amount_without_vat = total_amount / 1.1
-            print(f"✅ 부가세 제외 계산: {total_amount:,}원 → {amount_without_vat:,.0f}원")
-            return round(amount_without_vat)
+            amount_without_vat = round(total_amount / 1.1)
+            
+            # 검증: 부가세 제외 금액 + 부가세 = 실제 고지서 금액인지 확인
+            calculated_total = round(amount_without_vat * 1.1)
+            difference = total_amount - calculated_total
+            
+            if difference != 0:
+                # 1원 차이가 있으면 부가세 제외 금액을 보정
+                amount_without_vat += difference
+                print(f"✅ 1원 오차 보정: {difference:+d}원 조정")
+                
+            # 최종 검증
+            final_total = round(amount_without_vat * 1.1)
+            print(f"✅ 부가세 제외 계산: {total_amount:,}원 → {amount_without_vat:,}원 (검증: {final_total:,}원)")
+            
+            return amount_without_vat
         except Exception as e:
             print(f"❌ 부가세 제외 계산 실패: {e}")
             return None
     
-    def update_kolon_template(self, template_path, amount_without_vat, collection_date):
+    def update_kolon_template(self, template_path, amount_without_vat, collection_date, total_amount):
         """kolon.xlsx 템플릿 파일 업데이트"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -419,7 +432,7 @@ class KolonPreprocessor:
                     # 년월 패턴을 찾아서 교체
                     new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                     b13_cell.value = new_text
-                    print(f"✅ 대외공문 B13 셀 업데이트: {old_text} → {new_text}")
+                    print(f"대외공문 B13 셀 업데이트: {old_text} → {new_text}")
                 
                 # B16 셀 업데이트 (B,C,D,E,F,G 16행 병합)
                 b16_cell = doc_sheet.cell(row=16, column=2)
@@ -429,7 +442,7 @@ class KolonPreprocessor:
                     if new_text == old_text:
                         new_text = re.sub(r'\d{4}년\d{1,2}월', year_month, old_text)
                     b16_cell.value = new_text
-                    print(f"✅ 대외공문 B16 셀 업데이트: {old_text} → {new_text}")
+                    print(f"대외공문 B16 셀 업데이트: {old_text} → {new_text}")
                 
                 # 하단 테이블 수식 업데이트 (B24, D24, D25)
                 self.update_formula_references(doc_sheet, year_month)
@@ -439,7 +452,7 @@ class KolonPreprocessor:
                 if re.match(r'\d{4}년 \d{1,2}월', sheet.title):
                     old_title = sheet.title
                     sheet.title = year_month
-                    print(f"✅ 시트명 변경: {old_title} → {year_month}")
+                    print(f"시트명 변경: {old_title} → {year_month}")
                     
                     # B,C,D,E1 병합 셀의 텍스트 업데이트 ("2025년 07월 수수료 청구 금액" 형태)
                     b1_cell = sheet.cell(row=1, column=2)  # B1 셀
@@ -449,7 +462,7 @@ class KolonPreprocessor:
                         new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                         if new_text != old_text:
                             b1_cell.value = new_text
-                            print(f"✅ {year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
+                            print(f"{year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
                     break
             
             # 3. 세부내역 시트 업데이트
@@ -457,17 +470,21 @@ class KolonPreprocessor:
                 detail_sheet = workbook['세부내역']
                 # E12 셀에 부가세 제외 금액 입력
                 detail_sheet.cell(row=12, column=5).value = amount_without_vat
-                print(f"✅ 세부내역 시트 E12 셀 업데이트: {amount_without_vat:,}원")
+                print(f"세부내역 시트 E12 셀 업데이트: {amount_without_vat:,}원")
+                
+                # E15 셀에 총금액 비용 그대로 입력 (1.1 계산 전 총금액)
+                detail_sheet.cell(row=15, column=5).value = total_amount
+                print(f"✅ 세부내역 시트 E15 셀 업데이트: {total_amount:,}원 (총금액)")
             
             # 파일 저장
             workbook.save(output_path)
             workbook.close()
             
-            print(f"✅ kolon.xlsx 템플릿 업데이트 완료: {output_filename}")
+            print(f"kolon.xlsx 템플릿 업데이트 완료: {output_filename}")
             return output_path
             
         except Exception as e:
-            print(f"❌ kolon.xlsx 템플릿 업데이트 실패: {e}")
+            print(f"kolon.xlsx 템플릿 업데이트 실패: {e}")
             return None
     
     def update_formula_references(self, doc_sheet, year_month):
@@ -487,20 +504,20 @@ class KolonPreprocessor:
                     new_formula = re.sub(r"'(\d{4}년 \d{1,2}월)'!", f"'{year_month}'!", old_formula)
                     if new_formula != old_formula:
                         cell.value = new_formula
-                        print(f"✅ 대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
+                        print(f"대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
                         
         except Exception as e:
-            print(f"❌ 수식 참조 업데이트 오류: {e}")
+            print(f"수식 참조 업데이트 오류: {e}")
 
     def process_kolon_data(self, collection_date):
         """코오롱 데이터 전처리 메인 함수"""
         try:
-            print("🚀 코오롱 데이터 전처리 시작")
+            print("코오롱 데이터 전처리 시작")
             
             # 1. temp_processing 폴더에서 코오롱 파일 찾기
             temp_dir = "temp_processing"
             if not os.path.exists(temp_dir):
-                print("❌ temp_processing 폴더를 찾을 수 없습니다")
+                print("temp_processing 폴더를 찾을 수 없습니다")
                 return False
             
             kolon_files = []
@@ -510,7 +527,7 @@ class KolonPreprocessor:
                     kolon_files.append(file_path)
             
             if len(kolon_files) != 2:
-                print(f"❌ 코오롱 파일이 2개 필요합니다. 현재: {len(kolon_files)}개")
+                print(f"코오롱 파일이 2개 필요합니다. 현재: {len(kolon_files)}개")
                 return False
             
             # 2. CSV 변환
@@ -521,13 +538,13 @@ class KolonPreprocessor:
                     csv_files.append(csv_path)
             
             if len(csv_files) != 2:
-                print("❌ CSV 변환 실패")
+                print("CSV 변환 실패")
                 return False
             
-            print(f"✅ 변환 완료: {len(csv_files)}개 파일")
+            print(f"변환 완료: {len(csv_files)}개 파일")
             
             # 3. 데이터 읽기
-            print("📂 변환된 CSV 파일 목록:")
+            print("변환된 CSV 파일 목록:")
             for f in csv_files:
                 print(f"   - {f}")
                 
@@ -543,13 +560,13 @@ class KolonPreprocessor:
                     elif '날짜' in df.columns:  # OpenAI 데이터
                         openai_files.append(f)
                 except Exception as e:
-                    print(f"❌ 파일 읽기 실패: {f}, 오류: {e}")
+                    print(f"파일 읽기 실패: {f}, 오류: {e}")
             
             if not jaegyeong_files:
-                print("❌ 재경팀 데이터 파일을 찾을 수 없습니다")
+                print("재경팀 데이터 파일을 찾을 수 없습니다")
                 return False
             if not openai_files:
-                print("❌ OpenAI 데이터 파일을 찾을 수 없습니다")
+                print("OpenAI 데이터 파일을 찾을 수 없습니다")
                 return False
                 
             jaegyeong_file = jaegyeong_files[0]
@@ -561,7 +578,7 @@ class KolonPreprocessor:
             # OpenAI 데이터 로드
             df_openai = pd.read_csv(openai_file)
             
-            print(f"✅ 데이터 로드 완료 (재경팀: {len(df_jaegyeong)}행, OpenAI: {len(df_openai)}행)")
+            print(f"데이터 로드 완료 (재경팀: {len(df_jaegyeong)}행, OpenAI: {len(df_openai)}행)")
             
             # 4. 데이터 전처리
             df_jaegyeong = self.preprocess_jaegyeong_data(df_jaegyeong)
@@ -572,7 +589,7 @@ class KolonPreprocessor:
             if df_openai is None:
                 return False
             
-            print("✅ 데이터 전처리 완료")
+            print("데이터 전처리 완료")
             
             # 5. 코오롱 데이터만 필터링
             df_openai_kolon = df_openai[df_openai['계정'] == '코오롱'].copy()
@@ -582,7 +599,7 @@ class KolonPreprocessor:
             if matched_data is None:
                 return False
             
-            print(f"✅ 데이터 매칭 완료 (매칭: {len(matched_data)}건, 미매칭: {len(unmatched_data)}건)")
+            print(f"데이터 매칭 완료 (매칭: {len(matched_data)}건, 미매칭: {len(unmatched_data)}건)")
             
             # 7. 결과 파일 생성
             # 7.1. 매칭 결과 CSV 저장
@@ -640,7 +657,7 @@ class KolonPreprocessor:
                     return False
                 
                 # 7.4. 템플릿 업데이트 및 청구서 생성
-                final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date)
+                final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date, total_amount)
                 if final_invoice_path is None:
                     print("❌ 코오롱 청구서 생성 실패")
                     return False

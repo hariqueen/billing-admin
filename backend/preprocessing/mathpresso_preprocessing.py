@@ -134,20 +134,31 @@ class MathpressoPreprocessor:
             return None
     
     def convert_xlsx_to_csv_and_count_success(self, xlsx_file_path):
-        """XLSX 파일을 CSV로 변환하고 성공 건수 카운트"""
+        """XLSX 파일을 CSV로 변환하고 성공 건수 카운트 (문자유형 TALK + 발송상태 성공(전달))"""
         try:
             # XLSX 파일 읽기
             df = pd.read_excel(xlsx_file_path)
             print(f"✅ XLSX 파일 읽기 완료: {len(df)}행")
             
-            # [발송상태] 컬럼에서 "성공(전달)" 카운트
-            if '발송상태' in df.columns:
-                success_count = len(df[df['발송상태'] == '성공(전달)'])
-                print(f"✅ 성공(전달) 건수: {success_count}건")
-                return success_count
-            else:
+            # 필요한 컬럼 확인
+            if '발송상태' not in df.columns:
                 print("❌ [발송상태] 컬럼을 찾을 수 없습니다")
                 return 0
+            
+            if '문자유형' not in df.columns:
+                print("❌ [문자유형] 컬럼을 찾을 수 없습니다")
+                return 0
+            
+            # 문자유형이 'TALK'이고 발송상태가 '성공(전달)'인 행 카운트
+            filtered_df = df[(df['문자유형'] == 'TALK') & (df['발송상태'] == '성공(전달)')]
+            success_count = len(filtered_df)
+            
+            print(f"✅ 문자유형 'TALK' + 발송상태 '성공(전달)' 건수: {success_count}건")
+            print(f"   - 전체 행수: {len(df)}행")
+            print(f"   - 문자유형 'TALK': {len(df[df['문자유형'] == 'TALK'])}행")
+            print(f"   - 발송상태 '성공(전달)': {len(df[df['발송상태'] == '성공(전달)'])}행")
+            
+            return success_count
                 
         except Exception as e:
             print(f"❌ XLSX 파일 처리 실패: {e}")

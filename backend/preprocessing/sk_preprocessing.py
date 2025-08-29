@@ -87,21 +87,33 @@ class SKPreprocessor:
             return None
     
     def calculate_amount_without_vat(self, total_amount):
-        """부가세 10%를 제외한 금액 계산 (쉼표 없이)"""
+        """부가세 10%를 제외한 금액 계산 (1원 오차 보정 포함)"""
         try:
             # 부가세 포함 금액에서 부가세 제외
             # 총금액 = 공급가액 + 부가세(공급가액의 10%)
             # 총금액 = 공급가액 × 1.1
             # 공급가액 = 총금액 / 1.1
-            amount_without_vat = total_amount / 1.1
-            amount_without_vat_int = round(amount_without_vat)
-            print(f"✅ 부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat_int}원 (쉼표 없이)")
-            return amount_without_vat_int
+            amount_without_vat = round(total_amount / 1.1)
+            
+            # 검증: 부가세 제외 금액 + 부가세 = 실제 고지서 금액인지 확인
+            calculated_total = round(amount_without_vat * 1.1)
+            difference = total_amount - calculated_total
+            
+            if difference != 0:
+                # 1원 차이가 있으면 부가세 제외 금액을 보정
+                amount_without_vat += difference
+                print(f"✅ 1원 오차 보정: {difference:+d}원 조정")
+                
+            # 최종 검증
+            final_total = round(amount_without_vat * 1.1)
+            print(f"✅ 부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat}원 (검증: {final_total:,}원)")
+            
+            return amount_without_vat
         except Exception as e:
             print(f"❌ 부가세 제외 계산 실패: {e}")
             return None
     
-    def update_sk_template(self, template_path, amount_without_vat, collection_date):
+    def update_sk_template(self, template_path, amount_without_vat, collection_date, total_amount):
         """skelectlink.xlsx 템플릿 파일 업데이트"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -167,6 +179,10 @@ class SKPreprocessor:
                 # E4 셀에 부가세 제외 금액 입력 (쉼표 없이)
                 detail_sheet.cell(row=4, column=5).value = amount_without_vat
                 print(f"✅ 세부내역 시트 E4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
+                
+                # E8 셀에 실제 고지서 청구비용 그대로 입력
+                detail_sheet.cell(row=8, column=5).value = total_amount
+                print(f"✅ 세부내역 시트 E8 셀 업데이트: {total_amount}원 (실제 고지서 청구비용)")
             
             # 파일 저장
             workbook.save(output_path)
@@ -225,7 +241,7 @@ class SKPreprocessor:
                 return False
             
             # 4. 템플릿 업데이트 및 청구서 생성
-            final_invoice_path = self.update_sk_template(template_path, amount_without_vat, collection_date)
+            final_invoice_path = self.update_sk_template(template_path, amount_without_vat, collection_date, total_amount)
             if final_invoice_path is None:
                 print("❌ SK일렉링크 청구서 생성 실패")
                 return False

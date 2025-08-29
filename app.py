@@ -57,8 +57,8 @@ def get_host_ip():
         return "localhost"
 
 host = get_host_ip()
-print(f"📍 Frontend: http://{host}:3000")
-print(f"📍 Backend API: http://{host}:5001")
+print(f"Frontend: http://{host}:3000")
+print(f"Backend API: http://{host}:5001")
 
 @app.route('/api/companies', methods=['GET'])
 def get_companies():
@@ -167,14 +167,34 @@ def collect_data():
                         download_dir = str(Path.home() / "Downloads")
                         xlsx_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
                         
-                        # SMS 수집 직후이므로 가장 최근 파일이 SMS 파일
-                        latest_file = max(xlsx_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
-                        
-                        # SMS 수집 시간 기록 (CALL과 구분하기 위해)
-                        task_status[task_id]["sms_collection_time"] = os.path.getctime(os.path.join(download_dir, latest_file))
-                        
-                        task_status[task_id]["files"].append(latest_file)
-                        task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {latest_file}")
+                        # 디싸이더스/애드프로젝트는 여러 브랜드 파일을 다운로드하므로 최근 파일들을 모두 수집
+                        if company_name == "디싸이더스/애드프로젝트":
+                            # 최근 5분 이내에 생성된 발송이력 파일들을 모두 수집
+                            import time
+                            current_time = time.time()
+                            recent_sms_files = []
+                            
+                            for filename in xlsx_files:
+                                if '발송이력' in filename:
+                                    file_path = os.path.join(download_dir, filename)
+                                    if (current_time - os.path.getctime(file_path)) < 300:  # 5분 이내
+                                        recent_sms_files.append((filename, os.path.getctime(file_path)))
+                            
+                            # 시간순으로 정렬하여 추가
+                            recent_sms_files.sort(key=lambda x: x[1])
+                            for filename, ctime in recent_sms_files:
+                                task_status[task_id]["files"].append(filename)
+                                task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {filename}")
+                            
+                            # 가장 최근 파일의 시간을 SMS 수집 시간으로 기록
+                            if recent_sms_files:
+                                task_status[task_id]["sms_collection_time"] = recent_sms_files[-1][1]
+                        else:
+                            # 다른 회사들은 기존 로직 사용
+                            latest_file = max(xlsx_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                            task_status[task_id]["sms_collection_time"] = os.path.getctime(os.path.join(download_dir, latest_file))
+                            task_status[task_id]["files"].append(latest_file)
+                            task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {latest_file}")
                     else:
                         task_status[task_id]["log"].append("⚠️ SMS 데이터 수집 실패 또는 데이터 없음")
                     
@@ -224,10 +244,14 @@ def collect_data():
                                     task_status[task_id]["log"].append("✅ CHAT 데이터 수집 완료")
                                     # CHAT 파일도 수집된 파일 목록에 추가
                                     xlsx_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
-                                    latest_chat_file = max(xlsx_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
-                                    if latest_chat_file != latest_file:  # SMS 파일과 다른 경우만
+                                    # SMS 수집 이후 생성된 파일 찾기 (CHAT 파일)
+                                    chat_files = [f for f in xlsx_files if os.path.getctime(os.path.join(download_dir, f)) > task_status[task_id].get("sms_collection_time", 0)]
+                                    if chat_files:
+                                        latest_chat_file = max(chat_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
                                         task_status[task_id]["files"].append(latest_chat_file)
                                         task_status[task_id]["log"].append(f"✅ CHAT 파일 수집 완료: {latest_chat_file}")
+                                    else:
+                                        task_status[task_id]["log"].append("⚠️ CHAT 파일을 찾을 수 없음")
                                 else:
                                     task_status[task_id]["log"].append("⚠️ CHAT 데이터 수집 실패 또는 데이터 없음")
                                     

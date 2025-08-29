@@ -28,9 +28,7 @@ const getPreviousMonthRange = () => {
   const endDate = new Date(prevYear, prevMonth + 1, 0);
   const endDateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
   
-  console.log(`현재: ${currentYear}년 ${currentMonth + 1}월`);
-  console.log(`한 달 전: ${prevYear}년 ${prevMonth + 1}월`);
-  console.log(`계산된 범위: ${startDateStr} ~ ${endDateStr}`);
+
   
   return {
     startDate: startDateStr,
@@ -305,23 +303,34 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   const autoUploadCollectedFiles = async (companyName, collectedFiles) => {
     try {
       const company = companies.find(c => c.name === companyName);
-      const uploadedFiles = [];
       
-      // 중복 업로드 방지: 이미 업로드된 파일이 있으면 건너뛰기
+      // 중복 업로드 방지
       const existingUploads = company.uploadedFiles.filter(file => file).length;
       if (existingUploads > 0) {
         console.log(`${companyName}는 이미 ${existingUploads}개 파일이 업로드되어 있어 자동 업로드를 건너뜁니다.`);
         return;
       }
       
-      console.log(`${companyName} 자동 업로드 시작: ${collectedFiles.length}개 파일`);
+      // SMS 파일은 앞쪽에, CHAT 파일은 마지막에 배치
+      const smsFiles = collectedFiles.filter(f => f.includes('발송이력'));
+      const chatFiles = collectedFiles.filter(f => f.includes('채팅'));
+      const allFiles = [...smsFiles, ...chatFiles];
+
+      console.log(`${companyName} 자동 업로드 시작: ${allFiles.length}개 파일`);
       
-      for (let i = 0; i < Math.min(collectedFiles.length, company.requiredFileCount); i++) {
-        const filename = collectedFiles[i];
-        const fileLabel = company.fileLabels[i];
+      // 기존 업로드된 파일 초기화
+      setCompanies(prev => prev.map(comp => 
+        comp.name === companyName 
+          ? { ...comp, uploadedFiles: [] }
+          : comp
+      ));
+
+      // 순차적으로 파일 업로드
+      for (let i = 0; i < allFiles.length; i++) {
+        const filename = allFiles[i];
+        const fileLabel = filename.includes('채팅') ? 'CHAT 데이터' : 'SMS 데이터';
         
         try {
-          // 기존 upload-file API를 활용하여 자동 업로드
           const formData = new FormData();
           formData.append('company_name', companyName);
           formData.append('collected_filename', filename);
@@ -336,8 +345,13 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           const result = await response.json();
           
           if (response.ok) {
-            uploadedFiles[i] = result.filename;
             console.log(`✅ 자동 업로드 완료: ${filename} -> ${result.filename}`);
+            // 파일 업로드 후 상태 업데이트
+            setCompanies(prev => prev.map(comp => 
+              comp.name === companyName 
+                ? { ...comp, uploadedFiles: [...(comp.uploadedFiles || []), result.filename] }
+                : comp
+            ));
           } else {
             console.error(`❌ 자동 업로드 실패 (${filename}):`, result.error);
           }
@@ -346,11 +360,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         }
       }
       
-      setCompanies(prev => prev.map(comp => 
-        comp.name === companyName 
-          ? { ...comp, uploadedFiles: uploadedFiles }
-          : comp
-      ));
+      console.log('모든 파일 업로드 완료');
       
     } catch (error) {
       console.error('자동 업로드 오류:', error);

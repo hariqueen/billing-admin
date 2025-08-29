@@ -139,10 +139,27 @@ class WconceptPreprocessor:
                     amount_str = re.sub(r'[^\d]', '', bill_amount)
                     if amount_str:
                         total_amount = int(amount_str)
-                        # 부가세 10% 제외한 금액 계산 (부가세 포함 금액 ÷ 1.1)
-                        net_amount = int(total_amount / 1.1)
+                        # 부가세 10% 제외한 금액 계산 (1원 오차 보정 포함)
+                        net_amount = round(total_amount / 1.1)
+                        
+                        # 검증: 부가세 제외 금액 + 부가세 = 실제 고지서 금액인지 확인
+                        calculated_total = round(net_amount * 1.1)
+                        difference = total_amount - calculated_total
+                        
+                        if difference != 0:
+                            # 1원 차이가 있으면 부가세 제외 금액을 보정
+                            net_amount += difference
+                            print(f"✅ 1원 오차 보정: {difference:+d}원 조정")
+                            
+                        # 최종 검증
+                        final_total = round(net_amount * 1.1)
+                        
                         detail_sheet.cell(row=17, column=5).value = net_amount
-                        print(f"✅ 세부내역 시트 E17 셀 업데이트: {net_amount:,}원 (고지서: {total_amount:,}원, 부가세 제외)")
+                        print(f"✅ 세부내역 시트 E17 셀 업데이트: {net_amount:,}원 (고지서: {total_amount:,}원, 검증: {final_total:,}원)")
+                        
+                        # E21 셀에 실제 고지서 청구비용 그대로 입력
+                        detail_sheet.cell(row=21, column=5).value = total_amount
+                        print(f"✅ 세부내역 시트 E21 셀 업데이트: {total_amount:,}원 (실제 고지서 청구비용)")
             
             # 파일 저장
             workbook.save(output_path)
