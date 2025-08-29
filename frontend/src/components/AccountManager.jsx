@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 
+// API URL을 환경에 따라 자동으로 선택
+const API_URL = window.location.hostname === 'localhost' 
+  ? '${API_URL}'
+  : 'http://13.125.245.229:5001';
+
 const AccountManager = ({ onBack }) => {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +38,7 @@ const AccountManager = ({ onBack }) => {
   const fetchAccounts = async () => {
     try {
       console.log('🔍 계정 정보 로드 시작...');
-      const response = await fetch('http://13.125.245.229:5000/api/accounts');
+      const response = await fetch('${API_URL}/api/accounts');
       console.log('📡 API 응답:', response);
       
       if (response.ok) {
@@ -151,7 +156,7 @@ const AccountManager = ({ onBack }) => {
     if (!window.confirm('정말로 이 계정을 삭제하시겠습니까?')) return;
 
     try {
-      const response = await fetch(`http://13.125.245.229:5000/api/accounts/${accountId}`, {
+      const response = await fetch(`${API_URL}/api/accounts/${accountId}`, {
         method: 'DELETE'
       });
 
@@ -176,8 +181,8 @@ const AccountManager = ({ onBack }) => {
     setSaving(true);
     try {
       const url = editingAccount === 'new' 
-        ? 'http://13.125.245.229:5000/api/accounts'
-        : `http://13.125.245.229:5000/api/accounts/${editingAccount}`;
+        ? '${API_URL}/api/accounts'
+        : `${API_URL}/api/accounts/${editingAccount}`;
       
       const method = editingAccount === 'new' ? 'POST' : 'PUT';
 
