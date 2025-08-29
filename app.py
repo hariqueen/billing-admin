@@ -27,7 +27,7 @@ from backend.preprocessing.bill_processor import BillProcessor
 from backend.storage.admin_storage import AdminStorage
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # 크롤링 모듈 초기화
 db_manager = DatabaseManager()
