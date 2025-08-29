@@ -62,7 +62,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   // 통신비 정보 가져오기
   const fetchBillAmounts = async () => {
     try {
-      const response = await fetch('${API_URL}/api/bill-amounts');
+      const response = await fetch(`${API_URL}/api/bill-amounts`);
       const data = await response.json();
       
       // 회사 정보 업데이트
@@ -89,7 +89,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     }
 
     try {
-      const response = await fetch('${API_URL}/api/upload-bills', {
+      const response = await fetch(`${API_URL}/api/upload-bills`, {
         method: 'POST',
         body: formData
       });
@@ -117,7 +117,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   // 저장된 청구서 결과 로드
   const loadProcessedFiles = async () => {
     try {
-      const response = await fetch('${API_URL}/api/get-processed-files');
+      const response = await fetch(`${API_URL}/api/get-processed-files`);
       const data = await response.json();
       
       if (response.ok && data.processed_files) {
@@ -135,7 +135,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
-        const response = await fetch('${API_URL}/api/companies');
+        const response = await fetch(`${API_URL}/api/companies`);
         const data = await response.json();
         
         // 고객사별 설정
@@ -234,7 +234,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         requestBody.end_date = dateRange.endDate;
       }
       
-      const response = await fetch('${API_URL}/api/collect-data', {
+      const response = await fetch(`${API_URL}/api/collect-data`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +328,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           formData.append('file_index', i.toString());
           formData.append('file_label', fileLabel);
 
-          const response = await fetch('${API_URL}/api/upload-file', {
+          const response = await fetch(`${API_URL}/api/upload-file`, {
             method: 'POST',
             body: formData
           });
@@ -445,7 +445,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   // 청구서 결과 초기화
   const clearProcessedFiles = async (companyName) => {
     try {
-      const response = await fetch('${API_URL}/api/clear-processed-files', {
+      const response = await fetch(`${API_URL}/api/clear-processed-files`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -499,7 +499,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         formData.append('file_index', uploadIndex.toString());
         formData.append('file_label', fileLabel);
 
-        const response = await fetch('${API_URL}/api/upload-file', {
+        const response = await fetch(`${API_URL}/api/upload-file`, {
           method: 'POST',
           body: formData
         });
@@ -508,9 +508,9 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
 
         if (response.ok) {
           uploadedFiles[uploadIndex] = result.filename;
-          console.log(`✅ ${fileLabel} 업로드 완료: ${result.filename}`);
+          console.log(`${fileLabel} 업로드 완료: ${result.filename}`);
         } else {
-          console.error(`❌ ${fileLabel} 업로드 실패:`, result.error);
+          console.error(`${fileLabel} 업로드 실패:`, result.error);
         }
         
         uploadIndex++;
@@ -572,7 +572,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         requestBody.license_count = licenseCount;
       }
 
-      const response = await fetch('${API_URL}/api/process-file', {
+      const response = await fetch(`${API_URL}/api/process-file`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
