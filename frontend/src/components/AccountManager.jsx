@@ -3,8 +3,8 @@ import { Eye, EyeOff, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 
 // API URL을 환경에 따라 자동으로 선택
 const API_URL = window.location.hostname === 'localhost' 
-  ? '${API_URL}'
-  : 'http://13.125.245.229:5001';
+  ? 'http://localhost:5001'
+  : `http://${window.location.hostname}:5001`;
 
 const AccountManager = ({ onBack }) => {
   const [accounts, setAccounts] = useState([]);
@@ -37,20 +37,20 @@ const AccountManager = ({ onBack }) => {
   // Firebase에서 계정 정보 가져오기
   const fetchAccounts = async () => {
     try {
-      console.log('🔍 계정 정보 로드 시작...');
+      console.log('계정 정보 로드 시작...');
       const response = await fetch('${API_URL}/api/accounts');
-      console.log('📡 API 응답:', response);
+      console.log('API 응답:', response);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('📊 받은 데이터:', data);
+        console.log('받은 데이터:', data);
         setAccounts(data.accounts || []);
       } else {
         const errorData = await response.json();
-        console.error('❌ API 오류:', errorData);
+        console.error('API 오류:', errorData);
         
         // 임시 시뮬레이션 데이터 (Firebase 연결 실패 시)
-        console.log('🔄 시뮬레이션 데이터 로드...');
+        console.log('시뮬레이션 데이터 로드...');
         const simulationData = [
           {
             id: '1',
@@ -83,10 +83,10 @@ const AccountManager = ({ onBack }) => {
         setAccounts(simulationData);
       }
     } catch (error) {
-      console.error('❌ 계정 정보 로드 실패:', error);
+      console.error('계정 정보 로드 실패:', error);
       
       // 네트워크 오류 시에도 시뮬레이션 데이터 로드
-      console.log('🔄 네트워크 오류로 시뮬레이션 데이터 로드...');
+      console.log('네트워크 오류로 시뮬레이션 데이터 로드...');
       const simulationData = [
         {
           id: '1',

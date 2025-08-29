@@ -43,8 +43,22 @@ task_status = {}
 
 print("🚀 청구자동화 API 서버 시작")
 print("🔧 모드: 실제 크롤링")
-print("📍 Frontend: http://localhost:3000")
-print("📍 Backend API: http://localhost:5001")
+# 환경에 따라 호스트 자동 설정
+import socket
+def get_host_ip():
+    try:
+        # EC2에서는 실제 IP 반환
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return "13.125.245.229" if ip.startswith("172.31") else "localhost"
+    except:
+        return "localhost"
+
+host = get_host_ip()
+print(f"📍 Frontend: http://{host}:3000")
+print(f"📍 Backend API: http://{host}:5001")
 
 @app.route('/api/companies', methods=['GET'])
 def get_companies():

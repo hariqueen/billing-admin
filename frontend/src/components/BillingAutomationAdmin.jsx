@@ -3,8 +3,8 @@ import { Download, Upload, Play, Loader2 } from 'lucide-react';
 
 // API URL을 환경에 따라 자동으로 선택
 const API_URL = window.location.hostname === 'localhost' 
-  ? '${API_URL}'
-  : 'http://13.125.245.229:5001';
+  ? 'http://localhost:5001'
+  : `http://${window.location.hostname}:5001`;
 
 // 한 달 전 1일부터 말일까지 날짜 계산 함수
 const getPreviousMonthRange = () => {
@@ -310,11 +310,11 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       // 중복 업로드 방지: 이미 업로드된 파일이 있으면 건너뛰기
       const existingUploads = company.uploadedFiles.filter(file => file).length;
       if (existingUploads > 0) {
-        console.log(`⚠️ ${companyName}는 이미 ${existingUploads}개 파일이 업로드되어 있어 자동 업로드를 건너뜁니다.`);
+        console.log(`${companyName}는 이미 ${existingUploads}개 파일이 업로드되어 있어 자동 업로드를 건너뜁니다.`);
         return;
       }
       
-      console.log(`🚀 ${companyName} 자동 업로드 시작: ${collectedFiles.length}개 파일`);
+      console.log(`${companyName} 자동 업로드 시작: ${collectedFiles.length}개 파일`);
       
       for (let i = 0; i < Math.min(collectedFiles.length, company.requiredFileCount); i++) {
         const filename = collectedFiles[i];
@@ -583,7 +583,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       const result = await response.json();
       
       if (response.ok) {
-        console.log(`✅ ${companyName} 전처리 완료:`, result);
+        console.log(`${companyName} 전처리 완료:`, result);
         
         setCompanies(prev => prev.map(comp => 
           comp.name === companyName 
@@ -596,7 +596,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           showWConceptNotification();
         }
       } else {
-        console.error(`❌ ${companyName} 전처리 실패:`, result.error);
+        console.error(`${companyName} 전처리 실패:`, result.error);
         alert(`전처리 실패: ${result.error}`);
         
         setCompanies(prev => prev.map(comp => 
@@ -606,7 +606,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         ));
       }
     } catch (error) {
-      console.error(`❌ ${companyName} 전처리 오류:`, error);
+      console.error(`${companyName} 전처리 오류:`, error);
       alert(`전처리 중 오류가 발생했습니다: ${error.message}`);
       
       setCompanies(prev => prev.map(comp => 
@@ -641,7 +641,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
         
-        console.log(`✅ ${filename} 다운로드 완료`);
+        console.log(`${filename} 다운로드 완료`);
       } else {
         const error = await response.json();
         alert(`다운로드 실패: ${error.error}`);
