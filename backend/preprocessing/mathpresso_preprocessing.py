@@ -1,6 +1,7 @@
 import os
 import shutil
 import pandas as pd
+import calendar
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -134,7 +135,7 @@ class MathpressoPreprocessor:
             return None
     
     def convert_xlsx_to_csv_and_count_success(self, xlsx_file_path):
-        """XLSX 파일을 CSV로 변환하고 성공 건수 카운트 (문자유형 TALK + 발송상태 성공(전달))"""
+        """XLSX 파일을 CSV로 변환하고 문자유형별 성공 건수 카운트"""
         try:
             # XLSX 파일 읽기
             df = pd.read_excel(xlsx_file_path)
@@ -143,28 +144,75 @@ class MathpressoPreprocessor:
             # 필요한 컬럼 확인
             if '발송상태' not in df.columns:
                 print("❌ [발송상태] 컬럼을 찾을 수 없습니다")
-                return 0
+                return {}
             
             if '문자유형' not in df.columns:
                 print("❌ [문자유형] 컬럼을 찾을 수 없습니다")
-                return 0
+                return {}
             
-            # 문자유형이 'TALK'이고 발송상태가 '성공(전달)'인 행 카운트
-            filtered_df = df[(df['문자유형'] == 'TALK') & (df['발송상태'] == '성공(전달)')]
-            success_count = len(filtered_df)
+            # 문자유형별 성공(전달) 건수 카운트
+            success_df = df[df['발송상태'] == '성공(전달)']
             
-            print(f"✅ 문자유형 'TALK' + 발송상태 '성공(전달)' 건수: {success_count}건")
+            sms_count = len(success_df[success_df['문자유형'] == 'SMS'])
+            lms_count = len(success_df[success_df['문자유형'] == 'LMS'])
+            mms_count = len(success_df[success_df['문자유형'] == 'MMS'])
+            talk_count = len(success_df[success_df['문자유형'] == 'TALK'])
+            
+            print(f"✅ 문자유형별 성공(전달) 건수:")
+            print(f"   - SMS: {sms_count}건")
+            print(f"   - LMS: {lms_count}건")
+            print(f"   - MMS: {mms_count}건")
+            print(f"   - TALK: {talk_count}건")
             print(f"   - 전체 행수: {len(df)}행")
-            print(f"   - 문자유형 'TALK': {len(df[df['문자유형'] == 'TALK'])}행")
-            print(f"   - 발송상태 '성공(전달)': {len(df[df['발송상태'] == '성공(전달)'])}행")
             
-            return success_count
+            return {
+                'sms_count': sms_count,
+                'lms_count': lms_count,
+                'mms_count': mms_count,
+                'talk_count': talk_count
+            }
                 
         except Exception as e:
             print(f"❌ XLSX 파일 처리 실패: {e}")
-            return 0
+            return {}
     
-    def update_mathpresso_template(self, template_path, success_count, amount_without_vat, collection_date):
+    def calculate_meta_ics_usage(self, collection_date):
+        """Meta ICS 사용량 자동 계산"""
+        try:
+            date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+            days_in_month = calendar.monthrange(date_obj.year, date_obj.month)[1]
+            
+            # 계정 정보 (고정값)
+            metalcs_accounts = 6
+            ssl_vpn_accounts = 2
+            
+            # 사용일수 계산 (매일 사용 가정)
+            metalcs_usage_days = metalcs_accounts * days_in_month
+            ssl_vpn_usage_days = ssl_vpn_accounts * days_in_month
+            
+            # 라이선스 계산
+            metalcs_licenses = metalcs_usage_days / days_in_month
+            ssl_vpn_licenses = ssl_vpn_usage_days / days_in_month
+            
+            print(f"✅ Meta ICS 사용량 계산:")
+            print(f"   - 해당 월 일수: {days_in_month}일")
+            print(f"   - MetaLCS 사용일수: {metalcs_usage_days}일 ({metalcs_accounts}계정 × {days_in_month}일)")
+            print(f"   - SSL-VPN 사용일수: {ssl_vpn_usage_days}일 ({ssl_vpn_accounts}계정 × {days_in_month}일)")
+            print(f"   - MetaLCS 라이선스: {metalcs_licenses}개")
+            print(f"   - SSL-VPN 라이선스: {ssl_vpn_licenses}개")
+            
+            return {
+                'days_in_month': days_in_month,
+                'metalcs_usage_days': metalcs_usage_days,
+                'ssl_vpn_usage_days': ssl_vpn_usage_days,
+                'metalcs_licenses': metalcs_licenses,
+                'ssl_vpn_licenses': ssl_vpn_licenses
+            }
+        except Exception as e:
+            print(f"❌ Meta ICS 사용량 계산 실패: {e}")
+            return None
+    
+    def update_mathpresso_template(self, template_path, message_counts, amount_without_vat, collection_date):
         """mathpresso.xlsx 템플릿 파일 업데이트"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -230,13 +278,60 @@ class MathpressoPreprocessor:
             if '세부내역' in workbook.sheetnames:
                 detail_sheet = workbook['세부내역']
                 
-                # E15 셀에 성공 건수 입력 (숫자만)
-                detail_sheet.cell(row=15, column=5).value = success_count
-                print(f"✅ 세부내역 시트 E15 셀 업데이트: {success_count}건")
+                # 문자유형별 성공 건수 입력
+                # E12: SMS, E13: LMS, E14: MMS, E15: TALK
+                if 'sms_count' in message_counts:
+                    detail_sheet.cell(row=12, column=5).value = message_counts['sms_count']
+                    print(f"✅ 세부내역 시트 E12 셀 업데이트: {message_counts['sms_count']}건 (SMS)")
+                
+                if 'lms_count' in message_counts:
+                    detail_sheet.cell(row=13, column=5).value = message_counts['lms_count']
+                    print(f"✅ 세부내역 시트 E13 셀 업데이트: {message_counts['lms_count']}건 (LMS)")
+                
+                if 'mms_count' in message_counts:
+                    detail_sheet.cell(row=14, column=5).value = message_counts['mms_count']
+                    print(f"✅ 세부내역 시트 E14 셀 업데이트: {message_counts['mms_count']}건 (MMS)")
+                
+                if 'talk_count' in message_counts:
+                    detail_sheet.cell(row=15, column=5).value = message_counts['talk_count']
+                    print(f"✅ 세부내역 시트 E15 셀 업데이트: {message_counts['talk_count']}건 (TALK)")
                 
                 # F4 셀에 부가세 제외 금액 입력 (숫자만)
                 detail_sheet.cell(row=4, column=6).value = amount_without_vat
                 print(f"✅ 세부내역 시트 F4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
+                
+                # Meta ICS 계산 및 업데이트
+                ics_data = self.calculate_meta_ics_usage(collection_date)
+                if ics_data:
+                    # E28 셀에 해당 월 일수
+                    detail_sheet.cell(row=28, column=5).value = ics_data['days_in_month']
+                    print(f"✅ 세부내역 시트 E28 셀 업데이트: {ics_data['days_in_month']}일")
+                    
+                    # E30, E31 셀에 사용일수 (수식 대신 직접 계산값)
+                    detail_sheet.cell(row=30, column=5).value = ics_data['metalcs_usage_days']
+                    detail_sheet.cell(row=31, column=5).value = ics_data['ssl_vpn_usage_days']
+                    print(f"✅ 세부내역 시트 E30 셀 업데이트: {ics_data['metalcs_usage_days']}일 (MetaLCS)")
+                    print(f"✅ 세부내역 시트 E31 셀 업데이트: {ics_data['ssl_vpn_usage_days']}일 (SSL-VPN)")
+                    
+                    # F30, F31 셀에 사용 라이선스
+                    detail_sheet.cell(row=30, column=6).value = ics_data['metalcs_licenses']
+                    detail_sheet.cell(row=31, column=6).value = ics_data['ssl_vpn_licenses']
+                    print(f"✅ 세부내역 시트 F30 셀 업데이트: {ics_data['metalcs_licenses']}개 (MetaLCS)")
+                    print(f"✅ 세부내역 시트 F31 셀 업데이트: {ics_data['ssl_vpn_licenses']}개 (SSL-VPN)")
+                    
+                    # AK/AL 컬럼 자동 설정 (30일/31일 기준)
+                    if ics_data['days_in_month'] == 30:
+                        detail_sheet.cell(row=30, column=37).value = 30  # AK30
+                        detail_sheet.cell(row=31, column=37).value = 1   # AK31
+                        detail_sheet.cell(row=32, column=37).value = 1   # AK32
+                        print("✅ AK 컬럼 업데이트 (30일 기준)")
+                    else:  # 31일 (또는 28/29일)
+                        detail_sheet.cell(row=30, column=38).value = ics_data['days_in_month']  # AL30
+                        detail_sheet.cell(row=31, column=38).value = 1   # AL31
+                        detail_sheet.cell(row=32, column=38).value = 1   # AL32
+                        print(f"✅ AL 컬럼 업데이트 ({ics_data['days_in_month']}일 기준)")
+                    
+                    print(f"✅ Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
             
             # 파일 저장
             workbook.save(output_path)
@@ -294,9 +389,12 @@ class MathpressoPreprocessor:
                 print("❌ 업로드된 파일을 찾을 수 없습니다")
                 return False
             
-            # 4. XLSX 파일을 CSV로 변환하고 성공 건수 카운트
-            success_count = self.convert_xlsx_to_csv_and_count_success(uploaded_file_path)
-            print(f"📊 성공(전달) 건수: {success_count}건")
+            # 4. XLSX 파일을 CSV로 변환하고 문자유형별 성공 건수 카운트
+            message_counts = self.convert_xlsx_to_csv_and_count_success(uploaded_file_path)
+            if not message_counts:
+                print("❌ 문자유형별 건수 카운트 실패")
+                return False
+            print(f"📊 문자유형별 성공(전달) 건수: {message_counts}")
             
             # 5. mathpresso.xlsx 템플릿 다운로드
             template_path = self.download_mathpresso_template()
@@ -305,7 +403,7 @@ class MathpressoPreprocessor:
                 return False
             
             # 6. 템플릿 업데이트 및 청구서 생성
-            final_invoice_path = self.update_mathpresso_template(template_path, success_count, amount_without_vat, collection_date)
+            final_invoice_path = self.update_mathpresso_template(template_path, message_counts, amount_without_vat, collection_date)
             if final_invoice_path is None:
                 print("❌ 매스프레소(콴다) 청구서 생성 실패")
                 return False
