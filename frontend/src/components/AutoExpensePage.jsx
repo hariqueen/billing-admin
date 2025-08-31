@@ -77,6 +77,11 @@ const AutoExpensePage = ({ onBack, user }) => {
       return false;
     }
     
+    if (!user?.employeeId || !user?.password) {
+      alert('로그인 정보가 없습니다. 다시 로그인해주세요.');
+      return false;
+    }
+    
     return true;
   };
 
@@ -98,10 +103,11 @@ const AutoExpensePage = ({ onBack, user }) => {
       formData.append('category', category);
       formData.append('start_date', formatDateToYYYYMMDD(dateRange.startDate));
       formData.append('end_date', formatDateToYYYYMMDD(dateRange.endDate));
-      formData.append('user_id', user?.username || '');
-      formData.append('password', user?.password || '');
+      // 로그인 정보 사용
+      formData.append('user_id', user.employeeId);
+      formData.append('password', user.password);
       
-      const response = await fetch('${API_URL}/api/expense-automation', {
+      const response = await fetch(`${API_URL}/api/expense-automation`, {
         method: 'POST',
         body: formData
       });
@@ -181,10 +187,10 @@ const AutoExpensePage = ({ onBack, user }) => {
               <h3 className="font-medium text-blue-900">로그인 정보</h3>
             </div>
             <p className="text-blue-700">
-              현재 로그인된 계정: <span className="font-medium">{user?.username}</span>
+              현재 로그인된 계정: <span className="font-medium">{user?.name} ({user?.employeeId})</span>
             </p>
             <p className="text-sm text-blue-600 mt-1">
-              그룹웨어 자동화 시 이 계정 정보가 사용됩니다.
+              그룹웨어 자동화는 시스템 계정(admin)으로 실행됩니다.
             </p>
           </div>
 
@@ -343,7 +349,7 @@ const AutoExpensePage = ({ onBack, user }) => {
           <div className="bg-gray-100 rounded-lg p-4">
             <div className="text-sm text-gray-600">
               <p>• 조회 기간: {dateRange.startDate} ~ {dateRange.endDate}</p>
-              <p>• 그룹웨어 계정: {user?.username}</p>
+              <p>• 그룹웨어 계정: {user?.name} ({user?.employeeId})</p>
             </div>
           </div>
         </div>

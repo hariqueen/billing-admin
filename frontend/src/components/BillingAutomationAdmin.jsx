@@ -133,8 +133,12 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
+        console.log('🔍 고객사 목록 가져오기 시작...');
+        console.log('API URL:', `${API_URL}/api/companies`);
         const response = await fetch(`${API_URL}/api/companies`);
+        console.log('API 응답 상태:', response.status, response.statusText);
         const data = await response.json();
+        console.log('받은 데이터:', data);
         
         // 고객사별 설정
         const companyConfigs = {

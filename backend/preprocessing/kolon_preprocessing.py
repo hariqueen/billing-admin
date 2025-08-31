@@ -7,14 +7,16 @@ from openpyxl import load_workbook
 import re
 import shutil
 import firebase_admin
-from firebase_admin import credentials, storage
+from firebase_admin import credentials, storage, firestore
 from backend.utils.secrets_manager import get_firebase_secret
+import json
 
 class KolonPreprocessor:
     def __init__(self):
         self.download_dir = str(Path.home() / "Downloads")
         os.makedirs(self.download_dir, exist_ok=True)
         self.bucket = None
+        self.db = None
         self.setup_firebase()
     
     def setup_firebase(self):
@@ -37,10 +39,12 @@ class KolonPreprocessor:
             )
             
             self.bucket = storage.bucket()
-            print("✅ Firebase Storage 연결 완료")
+            self.db = firestore.client()
+            print("✅ Firebase Storage 및 Firestore 연결 완료")
         except Exception as e:
             print(f"❌ Firebase 연결 실패: {e}")
             self.bucket = None
+            self.db = None
     
     def download_kolon_template(self):
         """Firebase에서 kolon.xlsx 템플릿 다운로드"""
@@ -60,6 +64,29 @@ class KolonPreprocessor:
         except Exception as e:
             print(f"❌ kolon.xlsx 템플릿 다운로드 실패: {e}")
             return None
+    
+    def get_dept_mapping(self):
+        """Firebase에서 부서 매핑 데이터 가져오기"""
+        try:
+            if self.db is None:
+                print("Firebase Firestore 연결이 초기화되지 않았습니다.")
+                return {}
+            
+            # Firestore에서 부서 정보 조회
+            docs = self.db.collection('dept_codes').stream()
+            
+            dept_mapping = {}
+            for doc in docs:
+                data = doc.to_dict()
+                if 'DEPT_NM' in data and 'DEPT_CD' in data:
+                    dept_mapping[data['DEPT_NM']] = data['DEPT_CD']
+            
+            print(f"Firebase에서 {len(dept_mapping)}개의 부서 매핑 정보를 가져왔습니다.")
+            return dept_mapping
+            
+        except Exception as e:
+            print(f"Firebase에서 부서 매핑 데이터 조회 실패: {str(e)}")
+            return {}
         
     def convert_xls_to_csv(self, xls_file_path):
         """XLS/XLSX/CSV 파일을 CSV로 변환 또는 확인"""
@@ -207,6 +234,17 @@ class KolonPreprocessor:
             print(f"   재경팀 데이터: {len(df_jaegyeong)}건")
             print(f"   OpenAI 데이터: {len(df_openai)}건")
             
+            # 디버깅을 위한 데이터 샘플 출력
+            print("📊 재경팀 데이터 샘플:")
+            print(f"   일자 샘플: {df_jaegyeong['일자'].head().tolist()}")
+            print(f"   해외접수달러금액 샘플: {df_jaegyeong['해외접수달러금액'].head().tolist()}")
+            
+            print("📊 OpenAI 데이터 샘플:")
+            print(f"   일자 샘플: {df_openai['일자'].head().tolist()}")
+            print(f"   금액(USD) 샘플: {df_openai['금액(USD)'].head().tolist()}")
+            print(f"   계정 샘플: {df_openai['계정'].head().tolist()}")
+            
+            # 먼저 날짜로만 매칭하고, 그 다음 금액 차이를 확인
             merged = pd.merge(
                 df_jaegyeong,
                 df_openai[["일자", "금액(USD)", "계정"]],
@@ -215,13 +253,19 @@ class KolonPreprocessor:
                 right_on="일자"
             )
             
-            # 금액 차이가 0.5 USD 이내인 경우만 매칭으로 인정
+            # 금액 차이 계산 (0.5 USD 이내만 매칭으로 인정)
             merged["금액차이"] = abs(merged["해외접수달러금액"] - merged["금액(USD)"])
-            merged = merged[merged["금액차이"] <= 0.5]
+            print(f"📊 금액 차이 분석:")
+            if len(merged) > 0:
+                print(f"   최소 차이: {merged['금액차이'].min():.2f}")
+                print(f"   최대 차이: {merged['금액차이'].max():.2f}")
+                print(f"   평균 차이: {merged['금액차이'].mean():.2f}")
+                print(f"   0.5 USD 이내 건수: {(merged['금액차이'] <= 0.5).sum()}")
             
-            # 매칭/미매칭 데이터 분리
-            matched_data = merged[~merged["계정"].isna()].copy()
-            unmatched_data = df_jaegyeong[~df_jaegyeong["일자"].isin(matched_data["일자"])].copy()
+            # 금액 차이가 0.5 USD 이내이고 계정이 있는 경우만 매칭으로 인정
+            matched_condition = (~merged["계정"].isna()) & (merged["금액차이"] <= 0.5)
+            matched_data = merged[matched_condition].copy()
+            unmatched_data = merged[~matched_condition].copy()
             
             # 중복 제거
             matched_data = matched_data.drop_duplicates(subset=["거래ID"])
@@ -591,11 +635,8 @@ class KolonPreprocessor:
             
             print("데이터 전처리 완료")
             
-            # 5. 코오롱 데이터만 필터링
-            df_openai_kolon = df_openai[df_openai['계정'] == '코오롱'].copy()
-            
-            # 6. 데이터 매칭 (코오롱 데이터만)
-            matched_data, unmatched_data = self.match_data(df_jaegyeong, df_openai_kolon)
+            # 5. 데이터 매칭 (모든 OpenAI 데이터와 매칭)
+            matched_data, unmatched_data = self.match_data(df_jaegyeong, df_openai)
             if matched_data is None:
                 return False
             
@@ -606,74 +647,104 @@ class KolonPreprocessor:
             date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             collection_month = datetime.strptime(collection_date, '%Y-%m-%d').strftime('%Y%m')
             
-            # 1. OpenAI 매칭결과 파일 생성 (모든 데이터)
-            openai_filename = f"OpenAI매칭결과_{date_str}_{collection_month}.csv"
+            # 1. OpenAI 매칭결과 파일 생성 (모든 계정의 매칭된 데이터)
+            openai_filename = f"OpenAI_정확매칭결과_{date_str}_{collection_month}.csv"
             openai_path = os.path.join(self.download_dir, openai_filename)
             
-            # OpenAI 데이터로부터 결과 생성 (모든 계정)
-            result_df = pd.DataFrame({
-                '매출일자': df_openai['datetime'].dt.strftime('%Y%m%d'),  # YYYYMMDD 형식
-                '승인시각': df_openai['datetime'].dt.strftime('%H%M%S'),  # HHMMSS 형식
-                '매출금액': df_openai['금액(USD)'],
-                '계정': df_openai['계정'],  # 원본 계정값 사용
-                '표준적요': 156,  # 고정값
-                '증빙유형': '003',  # 고정값
-                '적요': 'OpenAI_GPT API 토큰 비용_' + df_openai['계정'],  # 계정별 적요
-                '프로젝트': df_openai['계정']  # 계정값을 프로젝트로 사용
-            })
-            
-            # 코오롱 데이터만 필터링
-            kolon_df = df_openai[df_openai['계정'] == '코오롱'].copy()
-            
-            result_df.to_csv(openai_path, index=False, encoding='utf-8-sig')
-            print(f"✅ OpenAI 매칭결과 CSV 저장 완료: {openai_filename}")
-            
-            # 6.2. 요약 보고서 Excel 저장
-            report_filename = f"코오롱_청구내역서_{date_str}_{collection_month}.xlsx"
-            report_path = os.path.join(self.download_dir, report_filename)
-            
-            if self.save_kolon_excel(matched_data, report_path):
-                print(f"✅ 청구내역서 Excel 저장 완료: {report_filename}")
+            # 모든 매칭된 데이터로부터 결과 생성
+            if len(matched_data) > 0:
+                # Firebase에서 부서 매핑 정보 가져오기
+                dept_mapping = self.get_dept_mapping()
                 
-                # 7. Firebase에서 kolon.xlsx 템플릿 다운로드 및 청구서 생성
-                print("🔥 Firebase kolon.xlsx 템플릿 처리 시작")
+                # 프로젝트 컬럼 설정 (부서 매핑이 있으면 사용, 없으면 계정값 사용)
+                if dept_mapping:
+                    project_values = matched_data['계정'].map(dept_mapping).fillna(matched_data['계정'])
+                    matched_count = project_values.ne(matched_data['계정']).sum()
+                    print(f"부서 매핑 결과: {matched_count}/{len(matched_data)} 건 매칭됨")
+                else:
+                    project_values = matched_data['계정']
+                    print("Firebase 연결 실패로 프로젝트 컬럼을 계정값으로 설정합니다.")
                 
-                # 7.1. 요약 시트에서 금액 추출
-                total_amount = self.extract_amount_from_summary(report_path)
-                if total_amount is None:
-                    print("❌ 요약 시트에서 금액 추출 실패")
-                    return False
+                # 기존 시스템과 동일한 컬럼 순서로 DataFrame 생성 (모든 계정)
+                result_df = pd.DataFrame({
+                    '매출일자': matched_data['매출일자'].astype(str),  # YYYYMMDD 형식 유지
+                    '승인시각': matched_data['승인시각'].astype(str).str.zfill(6),  # HHMMSS 형식
+                    '매출금액': matched_data['원화환산금액'],  # 원화 금액 사용
+                    '계정': matched_data['계정'],  # 매칭된 계정값
+                    '표준적요': 156,  # 고정값
+                    '증빙유형': '003',  # 고정값
+                    '적요': 'OpenAI_GPT API 토큰 비용_' + matched_data['계정'],  # 계정별 적요
+                    '프로젝트': project_values  # 부서 매핑된 값 또는 계정값
+                })
                 
-                # 7.2. 부가세 제외 금액 계산
-                amount_without_vat = self.calculate_amount_without_vat(total_amount)
-                if amount_without_vat is None:
-                    print("❌ 부가세 제외 계산 실패")
-                    return False
+                # 컬럼 순서 정리 (기존 시스템과 동일)
+                column_order = ['매출일자', '승인시각', '매출금액', '계정', '표준적요', '증빙유형', '적요', '프로젝트']
+                result_df = result_df[column_order]
                 
-                # 7.3. kolon.xlsx 템플릿 다운로드
-                template_path = self.download_kolon_template()
-                if template_path is None:
-                    print("❌ kolon.xlsx 템플릿 다운로드 실패")
-                    return False
+                result_df.to_csv(openai_path, index=False, encoding='utf-8-sig')
+                print(f"✅ OpenAI 매칭결과 CSV 저장 완료: {openai_filename} (총 {len(result_df)}건, 모든 계정 포함)")
                 
-                # 7.4. 템플릿 업데이트 및 청구서 생성
-                final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date, total_amount)
-                if final_invoice_path is None:
-                    print("❌ 코오롱 청구서 생성 실패")
-                    return False
-                
-                print(f"✅ 코오롱 전처리 완료! 총 3개 파일 생성:")
-                print(f"   1. OpenAI 매칭결과: {openai_filename}")
-                print(f"   2. 코오롱 청구내역서: {report_filename}")
-                print(f"   3. 코오롱FnC 상담솔루션 청구내역서: {os.path.basename(final_invoice_path)}")
-                
-                # 8. temp_processing 폴더 정리
-                self.cleanup_temp_folder()
-                
-                return True
+                # 코오롱 계정만 필터링 (코오롱 전용 파일 생성을 위해)
+                kolon_matched_data = matched_data[matched_data['계정'] == '코오롱'].copy()
+                print(f"📊 코오롱 계정 매칭 결과: {len(kolon_matched_data)}건")
             else:
-                print("❌ 청구내역서 Excel 저장 실패")
+                print("❌ 매칭된 데이터가 없어 OpenAI 매칭결과 파일을 생성할 수 없습니다")
                 return False
+            
+            # 2. 코오롱 전용 요약 보고서 Excel 저장
+            if len(kolon_matched_data) > 0:
+                report_filename = f"코오롱_청구내역서_{date_str}_{collection_month}.xlsx"
+                report_path = os.path.join(self.download_dir, report_filename)
+                
+                if self.save_kolon_excel(kolon_matched_data, report_path):
+                    print(f"✅ 청구내역서 Excel 저장 완료: {report_filename}")
+                    
+                    # 3. Firebase에서 kolon.xlsx 템플릿 다운로드 및 청구서 생성
+                    print("🔥 Firebase kolon.xlsx 템플릿 처리 시작")
+                
+                    # 3.1. 요약 시트에서 금액 추출
+                    total_amount = self.extract_amount_from_summary(report_path)
+                    if total_amount is None:
+                        print("❌ 요약 시트에서 금액 추출 실패")
+                        return False
+                    
+                    # 3.2. 부가세 제외 금액 계산
+                    amount_without_vat = self.calculate_amount_without_vat(total_amount)
+                    if amount_without_vat is None:
+                        print("❌ 부가세 제외 계산 실패")
+                        return False
+                    
+                    # 3.3. kolon.xlsx 템플릿 다운로드
+                    template_path = self.download_kolon_template()
+                    if template_path is None:
+                        print("❌ kolon.xlsx 템플릿 다운로드 실패")
+                        return False
+                    
+                    # 3.4. 템플릿 업데이트 및 청구서 생성
+                    final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date, total_amount)
+                    if final_invoice_path is None:
+                        print("❌ 코오롱 청구서 생성 실패")
+                        return False
+                    
+                    print(f"✅ 코오롱 전처리 완료! 총 3개 파일 생성:")
+                    print(f"   1. OpenAI 매칭결과: {openai_filename} (모든 계정)")
+                    print(f"   2. 코오롱 청구내역서: {report_filename}")
+                    print(f"   3. 코오롱FnC 상담솔루션 청구내역서: {os.path.basename(final_invoice_path)}")
+                    
+                    # 4. temp_processing 폴더 정리
+                    self.cleanup_temp_folder()
+                    
+                    return True
+                else:
+                    print("❌ 청구내역서 Excel 저장 실패")
+                    return False
+            else:
+                print("⚠️ 코오롱 계정 매칭 데이터가 없어 코오롱 전용 파일들을 생성하지 않습니다.")
+                print(f"✅ OpenAI 매칭결과만 생성 완료: {openai_filename} (모든 계정)")
+                
+                # temp_processing 폴더 정리
+                self.cleanup_temp_folder()
+                return True
             
         except Exception as e:
             import traceback

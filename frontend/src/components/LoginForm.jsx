@@ -25,11 +25,12 @@ const LoginForm = ({ onLogin }) => {
 
     const user = users[employeeId];
     if (user) {
-      // 성공적으로 로그인 (비밀번호 검증 없음)
+      // 성공적으로 로그인 (비밀번호도 함께 저장)
       onLogin({
         employeeId,
         name: user.name,
-        position: user.position
+        position: user.position,
+        password: password  // 비밀번호도 포함
       });
     } else {
       setError('등록되지 않은 사번입니다.');

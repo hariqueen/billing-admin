@@ -9,10 +9,28 @@ class ExpenseDataProcessor:
         self.config = ExpenseConfig()
     
     def load_file(self, file_path):
-        """파일 로드"""
+        """파일 로드 (다양한 인코딩 시도)"""
         try:
             if file_path.endswith('.csv'):
-                return pd.read_csv(file_path, encoding='utf-8-sig')
+                # 다양한 인코딩 시도
+                encodings = ['utf-8-sig', 'utf-8', 'cp949', 'euc-kr', 'latin-1']
+                
+                for encoding in encodings:
+                    try:
+                        print(f"📄 {encoding} 인코딩으로 파일 읽기 시도...")
+                        data = pd.read_csv(file_path, encoding=encoding)
+                        print(f"✅ {encoding} 인코딩으로 파일 읽기 성공")
+                        print(f"   데이터 형태: {data.shape[0]}행 x {data.shape[1]}열")
+                        print(f"   컬럼: {list(data.columns)}")
+                        return data
+                    except UnicodeDecodeError:
+                        print(f"❌ {encoding} 인코딩 실패")
+                        continue
+                    except Exception as e:
+                        print(f"❌ {encoding} 인코딩으로 읽기 실패: {e}")
+                        continue
+                
+                raise Exception("지원되는 인코딩으로 파일을 읽을 수 없습니다")
             else:
                 return pd.read_excel(file_path)
         except Exception as e:
@@ -21,6 +39,14 @@ class ExpenseDataProcessor:
     def process_data(self, data, category, start_date, end_date):
         """데이터 처리 및 필터링"""
         try:
+            print(f"📊 데이터 처리 시작:")
+            print(f"   카테고리: {category}")
+            print(f"   조회 기간: {start_date} ~ {end_date}")
+            print(f"   원본 데이터 컬럼: {list(data.columns)}")
+            print(f"   데이터 샘플 (첫 3행):")
+            for i, (idx, row) in enumerate(data.head(3).iterrows()):
+                print(f"     {i+1}: {row.to_dict()}")
+            
             # 날짜 형식 변환
             start_dt = datetime.strptime(start_date, "%Y%m%d")
             end_dt = datetime.strptime(end_date, "%Y%m%d")

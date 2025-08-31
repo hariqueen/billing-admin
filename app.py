@@ -853,9 +853,24 @@ def expense_automation():
         user_id = request.form.get('user_id', '')
         password = request.form.get('password', '')
         
+        # 디버깅을 위한 파라미터 로그
+        print(f"📊 받은 파라미터:")
+        print(f"   category: '{category}'")
+        print(f"   start_date: '{start_date}'")
+        print(f"   end_date: '{end_date}'")
+        print(f"   user_id: '{user_id}'")
+        print(f"   password: '***' (길이: {len(password)})")
+        print(f"   file: '{file.filename}'")
+        
         # 필수 파라미터 검증
         if not all([start_date, end_date, user_id, password]):
-            return jsonify({"error": "필수 파라미터가 누락되었습니다"}), 400
+            missing_params = []
+            if not start_date: missing_params.append('start_date')
+            if not end_date: missing_params.append('end_date')
+            if not user_id: missing_params.append('user_id')
+            if not password: missing_params.append('password')
+            print(f"❌ 누락된 파라미터: {missing_params}")
+            return jsonify({"error": f"필수 파라미터가 누락되었습니다: {', '.join(missing_params)}"}), 400
         
         # 날짜 형식 검증
         if len(start_date) != 8 or len(end_date) != 8:
