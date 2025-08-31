@@ -38,7 +38,7 @@ const AccountManager = ({ onBack }) => {
   const fetchAccounts = async () => {
     try {
       console.log('계정 정보 로드 시작...');
-      const response = await fetch('${API_URL}/api/accounts');
+      const response = await fetch(`${API_URL}/api/accounts`);
       console.log('API 응답:', response);
       
       if (response.ok) {
@@ -181,7 +181,7 @@ const AccountManager = ({ onBack }) => {
     setSaving(true);
     try {
       const url = editingAccount === 'new' 
-        ? '${API_URL}/api/accounts'
+        ? `${API_URL}/api/accounts`
         : `${API_URL}/api/accounts/${editingAccount}`;
       
       const method = editingAccount === 'new' ? 'POST' : 'PUT';

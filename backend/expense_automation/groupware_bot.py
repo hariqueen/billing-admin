@@ -356,47 +356,13 @@ class GroupwareAutomation:
                     # 체크박스 클릭
                     row_index = i + 1
                     
-                    # 방법 1: label 클릭
-                    print(f"      방법1 시도: label 클릭")
+                    # 성공한 방법: label 클릭
                     checkbox_label_xpath = f"/html/body/div[4]/div[3]/div[3]/div[2]/table/tbody/tr/td[1]/div[2]/div/div[3]/div[2]/table/tbody/tr[{row_index}]/td[1]/span/label"
-                    try:
-                        checkbox_label = self.wait.until(EC.element_to_be_clickable((By.XPATH, checkbox_label_xpath)))
-                        checkbox_label.click()
-                        time.sleep(1)
-                        print(f"      성공! 방법1(label 클릭)으로 체크박스 클릭 완료")
-                        return True
-                    except Exception as e:
-                        print(f"      방법1 실패: {e}")
-                    
-                    # 방법 2: input 클릭
-                    print(f"      방법2 시도: input 클릭")
-                    checkbox_input_xpath = f"/html/body/div[4]/div[3]/div[3]/div[2]/table/tbody/tr/td[1]/div[2]/div/div[3]/div[2]/table/tbody/tr[{row_index}]/td[1]/span/input"
-                    try:
-                        checkbox_input = self.wait.until(EC.element_to_be_clickable((By.XPATH, checkbox_input_xpath)))
-                        checkbox_input.click()
-                        time.sleep(1)
-                        print(f"      성공! 방법2(input 클릭)으로 체크박스 클릭 완료")
-                        return True
-                    except Exception as e:
-                        print(f"      방법2 실패: {e}")
-                    
-                    # 방법 3: name으로 찾기
-                    print(f"      방법3 시도: name 속성으로 찾기")
-                    try:
-                        checkboxes = self.driver.find_elements(By.NAME, "inp_CardChk")
-                        print(f"      name='inp_CardChk'로 {len(checkboxes)}개 체크박스 발견")
-                        if i < len(checkboxes):
-                            checkboxes[i].click()
-                            time.sleep(1)
-                            print(f"      성공! 방법3(name 속성)으로 체크박스 클릭 완료")
-                            return True
-                        else:
-                            print(f"      방법3 실패: 인덱스 {i}가 체크박스 개수 {len(checkboxes)}를 초과")
-                    except Exception as e:
-                        print(f"      방법3 실패: {e}")
-                    
-                    print(f"      모든 방법 실패")
-                    return False
+                    checkbox_label = self.wait.until(EC.element_to_be_clickable((By.XPATH, checkbox_label_xpath)))
+                    checkbox_label.click()
+                    print(f"      체크박스 클릭 완료")
+                    time.sleep(1)
+                    return True
             
             print(f"      매칭되는 금액을 찾지 못함")
             return False
@@ -747,18 +713,7 @@ class GroupwareAutomation:
             
         except Exception as e:
             print(f"반영 버튼 클릭 실패: {e}")
-            try:
-                apply_btn = self.driver.find_element(By.ID, "btnExpendCardToExpend")
-                apply_btn.click()
-                print("반영 버튼 클릭 완료 (백업 방법)")
-                
-                if self._wait_for_apply_completion():
-                    print("반영 완료")
-                    return True
-                else:
-                    return False
-            except:
-                return False    
+            return False    
     
     def _wait_for_apply_completion(self):
         """반영 진행률 팝업이 사라질 때까지 대기"""
@@ -840,25 +795,8 @@ class GroupwareAutomation:
         try:
             print("전체 체크박스 클릭...")
             
-            select_all_selectors = [
-                (By.XPATH, "/html/body/div[4]/div[3]/div[3]/div[2]/table/tbody/tr/td[1]/div[2]/div/div[3]/div[1]/div/table/thead/tr/th[1]/input"),
-                (By.ID, "inp_ListChk"),
-                (By.NAME, "inp_ListChk"),
-                (By.CSS_SELECTOR, "input[id='inp_ListChk']")
-            ]
-            
-            select_all_btn = None
-            for selector_type, selector in select_all_selectors:
-                try:
-                    select_all_btn = self.wait.until(EC.element_to_be_clickable((selector_type, selector)))
-                    break
-                except:
-                    continue
-            
-            if not select_all_btn:
-                print("전체 체크박스를 찾을 수 없음")
-                return False
-            
+            # 성공한 셀렉터 사용
+            select_all_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[4]/div[3]/div[3]/div[2]/table/tbody/tr/td[1]/div[2]/div/div[3]/div[1]/div/table/thead/tr/th[1]/input")))
             select_all_btn.click()
             time.sleep(2)
             

@@ -31,6 +31,7 @@ function App() {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    setShowAccountManager(false);
     setSidebarOpen(false);
   };
 
@@ -129,7 +130,10 @@ function App() {
 
           <div className="mt-8 pt-4 border-t border-gray-200">
             <button
-              onClick={() => setShowAccountManager(true)}
+              onClick={() => {
+                setShowAccountManager(true);
+                setSidebarOpen(false);
+              }}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                 showAccountManager 
                   ? 'bg-blue-100 text-blue-700' 
@@ -206,7 +210,10 @@ function App() {
 
           <div className="mt-8 pt-4 border-t border-gray-200">
             <button
-              onClick={() => setShowAccountManager(true)}
+              onClick={() => {
+                setShowAccountManager(true);
+                setSidebarOpen(false);
+              }}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                 showAccountManager 
                   ? 'bg-blue-100 text-blue-700' 
