@@ -10,6 +10,7 @@ import firebase_admin
 from firebase_admin import credentials, storage, firestore
 from backend.utils.secrets_manager import get_firebase_secret
 import json
+import calendar
 
 class KolonPreprocessor:
     def __init__(self):
@@ -447,6 +448,42 @@ class KolonPreprocessor:
             print(f"❌ 부가세 제외 계산 실패: {e}")
             return None
     
+    def calculate_meta_ics_usage(self, collection_date):
+        """Meta ICS 사용량 자동 계산 (코오롱용)"""
+        try:
+            date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+            days_in_month = calendar.monthrange(date_obj.year, date_obj.month)[1]
+            
+            # 코오롱 계정 정보 (고정값)
+            metalcs_accounts = 65  # D39 셀의 계정 수 (코오롱은 65개 계정 사용)
+            ssl_vpn_accounts = 0   # SSL-VPN은 사용하지 않음
+            
+            # 사용일수 계산 (매일 사용 가정)
+            metalcs_usage_days = metalcs_accounts * days_in_month
+            ssl_vpn_usage_days = ssl_vpn_accounts * days_in_month
+            
+            # 라이선스 계산
+            metalcs_licenses = metalcs_usage_days / days_in_month
+            ssl_vpn_licenses = ssl_vpn_usage_days / days_in_month
+            
+            print(f"✅ 코오롱 Meta ICS 사용량 계산:")
+            print(f"   - 해당 월 일수: {days_in_month}일")
+            print(f"   - MetaLCS 사용일수: {metalcs_usage_days}일 ({metalcs_accounts}계정 × {days_in_month}일)")
+            print(f"   - SSL-VPN 사용일수: {ssl_vpn_usage_days}일 ({ssl_vpn_accounts}계정 × {days_in_month}일)")
+            print(f"   - MetaLCS 라이선스: {metalcs_licenses}개")
+            print(f"   - SSL-VPN 라이선스: {ssl_vpn_licenses}개")
+            
+            return {
+                'days_in_month': days_in_month,
+                'metalcs_usage_days': metalcs_usage_days,
+                'ssl_vpn_usage_days': ssl_vpn_usage_days,
+                'metalcs_licenses': metalcs_licenses,
+                'ssl_vpn_licenses': ssl_vpn_licenses
+            }
+        except Exception as e:
+            print(f"❌ Meta ICS 사용량 계산 실패: {e}")
+            return None
+    
     def update_kolon_template(self, template_path, amount_without_vat, collection_date, total_amount):
         """kolon.xlsx 템플릿 파일 업데이트"""
         try:
@@ -518,7 +555,16 @@ class KolonPreprocessor:
                 
                 # E15 셀에 총금액 비용 그대로 입력 (1.1 계산 전 총금액)
                 detail_sheet.cell(row=15, column=5).value = total_amount
-                print(f"✅ 세부내역 시트 E15 셀 업데이트: {total_amount:,}원 (총금액)")
+                print(f"세부내역 시트 E15 셀 업데이트: {total_amount:,}원 (총금액)")
+                
+                # Meta ICS 계산 및 업데이트
+                ics_data = self.calculate_meta_ics_usage(collection_date)
+                if ics_data:
+                    # E36 셀에 해당 월 일수 (E38 셀의 =E36*D38 수식이 자동으로 계산됨)
+                    detail_sheet.cell(row=36, column=5).value = ics_data['days_in_month']
+                    print(f"세부내역 시트 E36 셀 업데이트: {ics_data['days_in_month']}일")
+                    
+                    print(f"Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
             
             # 파일 저장
             workbook.save(output_path)

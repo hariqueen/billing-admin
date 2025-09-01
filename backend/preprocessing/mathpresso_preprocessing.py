@@ -313,23 +313,23 @@ class MathpressoPreprocessor:
                     print(f"✅ 세부내역 시트 E30 셀 업데이트: {ics_data['metalcs_usage_days']}일 (MetaLCS)")
                     print(f"✅ 세부내역 시트 E31 셀 업데이트: {ics_data['ssl_vpn_usage_days']}일 (SSL-VPN)")
                     
-                    # F30, F31 셀에 사용 라이선스
+                    # F30, F31 셀에 사용 라이선스 (E28 셀 참조 방식)
                     detail_sheet.cell(row=30, column=6).value = ics_data['metalcs_licenses']
                     detail_sheet.cell(row=31, column=6).value = ics_data['ssl_vpn_licenses']
                     print(f"✅ 세부내역 시트 F30 셀 업데이트: {ics_data['metalcs_licenses']}개 (MetaLCS)")
                     print(f"✅ 세부내역 시트 F31 셀 업데이트: {ics_data['ssl_vpn_licenses']}개 (SSL-VPN)")
                     
-                    # AK/AL 컬럼 자동 설정 (30일/31일 기준)
-                    if ics_data['days_in_month'] == 30:
-                        detail_sheet.cell(row=30, column=37).value = 30  # AK30
-                        detail_sheet.cell(row=31, column=37).value = 1   # AK31
-                        detail_sheet.cell(row=32, column=37).value = 1   # AK32
-                        print("✅ AK 컬럼 업데이트 (30일 기준)")
-                    else:  # 31일 (또는 28/29일)
-                        detail_sheet.cell(row=30, column=38).value = ics_data['days_in_month']  # AL30
-                        detail_sheet.cell(row=31, column=38).value = 1   # AL31
-                        detail_sheet.cell(row=32, column=38).value = 1   # AL32
-                        print(f"✅ AL 컬럼 업데이트 ({ics_data['days_in_month']}일 기준)")
+                    # H30~AL30, H31~AL31 셀에 일별 사용량 설정 (1~31일)
+                    for day in range(1, 32):
+                        col = 7 + day  # H=8, I=9, ..., AL=38
+                        if day <= ics_data['days_in_month']:
+                            detail_sheet.cell(row=30, column=col).value = 1  # MetalCS 해당 월의 일수만큼 1 입력
+                            detail_sheet.cell(row=31, column=col).value = 1  # SSL-VPN 해당 월의 일수만큼 1 입력
+                        else:
+                            detail_sheet.cell(row=30, column=col).value = 0  # MetalCS 나머지는 0
+                            detail_sheet.cell(row=31, column=col).value = 0  # SSL-VPN 나머지는 0
+                    
+                    print(f"✅ H30~AL30, H31~AL31 셀 일별 사용량 설정 완료 ({ics_data['days_in_month']}일 기준)")
                     
                     print(f"✅ Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
             

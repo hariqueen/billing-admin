@@ -589,8 +589,8 @@ def process_file():
                     
                     for filename in all_files:
                         if (("코오롱_청구내역서_" in filename and filename.endswith(".xlsx")) or
-                            ("OpenAI매칭결과_" in filename and filename.endswith(".csv")) or
-                            ("코오롱FnC" in filename and "상담솔루션 청구내역서" in filename and filename.endswith(".xlsx"))):
+                            ("OpenAI_정확매칭결과_" in filename and filename.endswith(".csv")) or
+                            ("코오롱FnC_상담솔루션 청구내역서" in filename and filename.endswith(".xlsx"))):
                             file_path = os.path.join(download_dir, filename)
                             if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
                                 processed_files.append((filename, os.path.getctime(file_path)))

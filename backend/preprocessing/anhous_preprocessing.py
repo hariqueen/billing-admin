@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+import calendar
 
 class AnhousPreprocessor:
     def __init__(self):
@@ -344,6 +345,12 @@ class AnhousPreprocessor:
                     print(f"❌ 계산 오류 (행 {current_row}): {e}")
                 
                 current_row += 1
+            
+            # AJ29 셀에 해당 월 일수 업데이트 (Meta ICS 계산용)
+            date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+            days_in_month = calendar.monthrange(date_obj.year, date_obj.month)[1]
+            sheet.cell(row=29, column=36).value = days_in_month  # AJ29 셀
+            print(f"세부내역 시트 AJ29 셀 업데이트: {days_in_month}일")
             
             # 파일 저장
             workbook.save(output_path)

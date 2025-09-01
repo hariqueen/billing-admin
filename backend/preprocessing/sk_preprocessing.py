@@ -7,6 +7,7 @@ import re
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+import calendar
 
 class SKPreprocessor:
     def __init__(self):
@@ -113,6 +114,42 @@ class SKPreprocessor:
             print(f"❌ 부가세 제외 계산 실패: {e}")
             return None
     
+    def calculate_meta_ics_usage(self, collection_date):
+        """Meta ICS 사용량 자동 계산 (SK일렉링크용)"""
+        try:
+            date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+            days_in_month = calendar.monthrange(date_obj.year, date_obj.month)[1]
+            
+            # SK일렉링크 계정 정보 (고정값)
+            metalcs_accounts = 14  # D40 셀의 계정 수
+            ssl_vpn_accounts = 0   # SSL-VPN은 사용하지 않음
+            
+            # 사용일수 계산 (매일 사용 가정)
+            metalcs_usage_days = metalcs_accounts * days_in_month
+            ssl_vpn_usage_days = ssl_vpn_accounts * days_in_month
+            
+            # 라이선스 계산
+            metalcs_licenses = metalcs_usage_days / days_in_month
+            ssl_vpn_licenses = ssl_vpn_usage_days / days_in_month
+            
+            print(f"✅ SK일렉링크 Meta ICS 사용량 계산:")
+            print(f"   - 해당 월 일수: {days_in_month}일")
+            print(f"   - MetaLCS 사용일수: {metalcs_usage_days}일 ({metalcs_accounts}계정 × {days_in_month}일)")
+            print(f"   - SSL-VPN 사용일수: {ssl_vpn_usage_days}일 ({ssl_vpn_accounts}계정 × {days_in_month}일)")
+            print(f"   - MetaLCS 라이선스: {metalcs_licenses}개")
+            print(f"   - SSL-VPN 라이선스: {ssl_vpn_licenses}개")
+            
+            return {
+                'days_in_month': days_in_month,
+                'metalcs_usage_days': metalcs_usage_days,
+                'ssl_vpn_usage_days': ssl_vpn_usage_days,
+                'metalcs_licenses': metalcs_licenses,
+                'ssl_vpn_licenses': ssl_vpn_licenses
+            }
+        except Exception as e:
+            print(f"❌ Meta ICS 사용량 계산 실패: {e}")
+            return None
+    
     def update_sk_template(self, template_path, amount_without_vat, collection_date, total_amount):
         """skelectlink.xlsx 템플릿 파일 업데이트"""
         try:
@@ -183,6 +220,15 @@ class SKPreprocessor:
                 # E8 셀에 실제 고지서 청구비용 그대로 입력
                 detail_sheet.cell(row=8, column=5).value = total_amount
                 print(f"✅ 세부내역 시트 E8 셀 업데이트: {total_amount}원 (실제 고지서 청구비용)")
+                
+                # Meta ICS 계산 및 업데이트
+                ics_data = self.calculate_meta_ics_usage(collection_date)
+                if ics_data:
+                    # E38 셀에 해당 월 일수 (E40 셀의 =D40*E38 수식이 자동으로 계산됨)
+                    detail_sheet.cell(row=38, column=5).value = ics_data['days_in_month']
+                    print(f"세부내역 시트 E38 셀 업데이트: {ics_data['days_in_month']}일")
+                    
+                    print(f"Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
             
             # 파일 저장
             workbook.save(output_path)
