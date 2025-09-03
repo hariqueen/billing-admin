@@ -335,13 +335,14 @@ class GroupwareAutomation:
             clean_target = self._clean_amount(str(target_amount))
             print(f"      찾는 금액: {clean_target}")
             
-            # 금액 셀들 찾기
+            # 현재 페이지의 금액 셀들 찾기
             amount_cells = self.driver.find_elements(By.CSS_SELECTOR, "td.td_ri span.fwb")
             print(f"      총 {len(amount_cells)}개 금액 셀 발견")
             
             for i, cell in enumerate(amount_cells):
                 cell_amount = self._clean_amount(cell.text)
                 print(f"      웹 금액 {i+1}: {cell.text} -> {cell_amount}")
+                print(f"      비교: '{cell_amount}' == '{clean_target}' -> {cell_amount == clean_target}")
                 
                 if cell_amount == clean_target:
                     print(f"      금액 매칭! 행 {i+1}")
@@ -364,7 +365,7 @@ class GroupwareAutomation:
                     time.sleep(1)
                     return True
             
-            print(f"      매칭되는 금액을 찾지 못함")
+            print(f"      현재 페이지에서 매칭되는 금액을 찾지 못함")
             return False
             
         except Exception as e:
@@ -442,6 +443,46 @@ class GroupwareAutomation:
         except:
             return "0"
 
+    def _find_matching_data(self, web_amount, processed_data):
+        """웹페이지 금액과 매칭되는 CSV 데이터 찾기"""
+        try:
+            web_amount_clean = int(self._clean_amount(web_amount))
+            
+            # 정확히 매칭되는 데이터 먼저 찾기
+            for data in processed_data:
+                if data.get('_used'):  # 이미 사용된 데이터는 건너뛰기
+                    continue
+                    
+                csv_amount = int(self._clean_amount(data.get('amount', 0)))
+                if csv_amount == web_amount_clean:
+                    data['_used'] = True  # 사용됨 표시
+                    return data
+            
+            # 정확한 매칭이 없으면 가장 가까운 금액 찾기 (차이가 100원 이내)
+            closest_data = None
+            min_diff = float('inf')
+            
+            for data in processed_data:
+                if data.get('_used'):  # 이미 사용된 데이터는 건너뛰기
+                    continue
+                    
+                csv_amount = int(self._clean_amount(data.get('amount', 0)))
+                diff = abs(csv_amount - web_amount_clean)
+                
+                if diff < min_diff and diff <= 100:  # 100원 이내 차이만 허용
+                    min_diff = diff
+                    closest_data = data
+            
+            if closest_data:
+                closest_data['_used'] = True  # 사용됨 표시
+                return closest_data
+                
+            return None
+            
+        except Exception as e:
+            print(f"      데이터 매칭 실패: {e}")
+            return None
+
     def _input_form_data(self, data_row):
         """폼 데이터 입력"""
         try:
@@ -485,6 +526,47 @@ class GroupwareAutomation:
             
         except Exception as e:
             raise Exception(f"폼 데이터 입력 실패: {e}")
+
+    def _input_default_form_data(self):
+        """기본 폼 데이터 입력 (엑셀 데이터와 매칭하지 않고)"""
+        try:
+            # 표준 적요 입력 (기본값)
+            print(f"      표준적요: 156 (기본값)")
+            summary_input = self.driver.find_element(By.ID, "txtExpendCardDispSummary")
+            summary_input.clear()
+            summary_input.send_keys("156")
+            summary_input.send_keys(Keys.ENTER)
+            time.sleep(1)
+            
+            # 증빙 유형 입력 (기본값)
+            print(f"      증빙유형: 003 (기본값)")
+            evidence_input = self.driver.find_element(By.ID, "txtExpendCardDispAuth")
+            evidence_input.clear()
+            evidence_input.send_keys("003")
+            evidence_input.send_keys(Keys.ENTER)
+            time.sleep(1)
+            
+            # 적요 입력 (기본값)
+            print(f"      적요: OpenAI_GPT API 토큰 비용 (기본값)")
+            note_input = self.driver.find_element(By.ID, "txtExpendCardDispNote")
+            note_input.clear()
+            note_input.send_keys("OpenAI_GPT API 토큰 비용")
+            note_input.send_keys(Keys.ENTER)
+            time.sleep(1)
+            
+            # 프로젝트 입력 (기본값)
+            print(f"      프로젝트: SAAS3002 (기본값)")
+            project_input = self.driver.find_element(By.ID, "txtExpendCardDispProject")
+            project_input.clear()
+            project_input.send_keys("SAAS3002")
+            project_input.send_keys(Keys.ENTER)
+            time.sleep(1)
+            
+            return True
+            
+        except Exception as e:
+            print(f"      기본 폼 데이터 입력 실패: {e}")
+            return False
 
     def _click_save(self, data_row=None):
         """저장 버튼 클릭"""
@@ -612,23 +694,63 @@ class GroupwareAutomation:
                 category = processed_data[0].get('category', '')
                 self.setup_card_interface(start_date, end_date, category)
                 
-                # 현재 페이지에서 처리 가능한 모든 데이터 입력
+                # 현재 페이지에 있는 모든 금액을 자동으로 처리
                 round_processed = 0
                 
-                for i in range(processed_count, total_records):
-                    data_row = processed_data[i]
-                    record_index = i + 1
-                    
-                    if progress_callback:
-                        progress_callback(f"레코드 처리 중... ({record_index}/{total_records})")
-                    
-                    # 개별 레코드 처리
-                    if self.process_single_record(data_row, record_index, total_records):
+                # 현재 페이지의 금액 셀 개수 확인
+                amount_cells = self.driver.find_elements(By.CSS_SELECTOR, "td.td_ri span.fwb")
+                total_cells = len(amount_cells)
+                print(f"   현재 페이지에서 {total_cells}개 금액 셀 발견")
+                
+                # 각 행을 순차적으로 처리 (DOM 변경을 고려하여 매번 다시 찾기)
+                for i in range(total_cells):
+                    try:
+                        # 매번 새로 금액 셀들을 찾기 (Stale Element 방지)
+                        current_amount_cells = self.driver.find_elements(By.CSS_SELECTOR, "td.td_ri span.fwb")
+                        if i >= len(current_amount_cells):
+                            print(f"   행 {i+1}: 금액 셀이 더 이상 존재하지 않음")
+                            break
+                        
+                        cell = current_amount_cells[i]
+                        cell_amount = self._clean_amount(cell.text)
+                        print(f"   웹 금액 {i+1}: {cell.text} -> {cell_amount}")
+                        
+                        # 이미 처리된 행인지 확인
+                        if self._is_row_already_processed(i):
+                            print(f"   행 {i+1}은 이미 처리됨 - 건너뛰기")
+                            continue
+                        
+                        print(f"   행 {i+1}을 처리합니다")
+                        
+                        # 체크박스 클릭
+                        row_index = i + 1
+                        checkbox_label_xpath = f"/html/body/div[4]/div[3]/div[3]/div[2]/table/tbody/tr/td[1]/div[2]/div/div[3]/div[2]/table/tbody/tr[{row_index}]/td[1]/span/label"
+                        checkbox_label = self.wait.until(EC.element_to_be_clickable((By.XPATH, checkbox_label_xpath)))
+                        checkbox_label.click()
+                        print(f"   체크박스 클릭 완료")
+                        time.sleep(1)
+                        
+                        # 현재 행의 금액 추출하여 CSV 데이터와 매칭
+                        current_amount_text = current_amount_cells[i].text
+                        matching_data = self._find_matching_data(current_amount_text, processed_data)
+                        
+                        if matching_data:
+                            print(f"   매칭된 데이터 찾음: 금액={matching_data.get('amount')}, 적요={matching_data.get('note')}, 프로젝트={matching_data.get('project')}")
+                            # 실제 CSV 데이터로 폼 입력
+                            self._input_form_data(matching_data)
+                        else:
+                            print(f"   매칭되는 데이터 없음 - 기본값 사용")
+                            # 매칭되는 데이터가 없으면 기본값 사용
+                            self._input_default_form_data()
+                        
+                        # 저장
+                        self._click_save(matching_data if matching_data else None)
+                        print(f"   행 {i+1} 처리 완료")
                         round_processed += 1
-                        processed_count += 1
-                    else:
-                        print(f"   현재 페이지에서 더 이상 처리할 데이터가 없음")
-                        break
+                        
+                    except Exception as e:
+                        print(f"   행 {i+1} 처리 중 오류: {e}")
+                        continue
                 
                 print(f"라운드 {round_number} 완료: {round_processed}개 처리됨")
                 
