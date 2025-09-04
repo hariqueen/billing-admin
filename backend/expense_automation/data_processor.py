@@ -17,17 +17,17 @@ class ExpenseDataProcessor:
                 
                 for encoding in encodings:
                     try:
-                        print(f"📄 {encoding} 인코딩으로 파일 읽기 시도...")
+                        print(f"{encoding} 인코딩으로 파일 읽기 시도...")
                         data = pd.read_csv(file_path, encoding=encoding)
-                        print(f"✅ {encoding} 인코딩으로 파일 읽기 성공")
+                        print(f"{encoding} 인코딩으로 파일 읽기 성공")
                         print(f"   데이터 형태: {data.shape[0]}행 x {data.shape[1]}열")
                         print(f"   컬럼: {list(data.columns)}")
                         return data
                     except UnicodeDecodeError:
-                        print(f"❌ {encoding} 인코딩 실패")
+                        print(f"{encoding} 인코딩 실패")
                         continue
                     except Exception as e:
-                        print(f"❌ {encoding} 인코딩으로 읽기 실패: {e}")
+                        print(f"{encoding} 인코딩으로 읽기 실패: {e}")
                         continue
                 
                 raise Exception("지원되는 인코딩으로 파일을 읽을 수 없습니다")
@@ -39,7 +39,7 @@ class ExpenseDataProcessor:
     def process_data(self, data, category, start_date, end_date):
         """데이터 처리 및 필터링"""
         try:
-            print(f"📊 데이터 처리 시작:")
+            print(f"데이터 처리 시작:")
             print(f"   카테고리: {category}")
             print(f"   조회 기간: {start_date} ~ {end_date}")
             print(f"   원본 데이터 컬럼: {list(data.columns)}")

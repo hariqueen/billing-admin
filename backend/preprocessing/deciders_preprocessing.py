@@ -285,6 +285,13 @@ class DecidersPreprocessor:
             # 워크북 로드
             workbook = load_workbook(output_path)
             
+            # B9 셀에 문서번호 설정 (MMP-{년월} 형식)
+            document_number = f"MMP-{date_prefix}"
+            for sheet in workbook.worksheets:
+                if '세부내역' in sheet.title or '대외공문' in sheet.title:
+                    sheet.cell(row=9, column=2).value = f"문서번호 : {document_number}"
+                    print(f"✅ {sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
+            
             # 세부내역 시트에서 데이터 입력
             if '세부내역' in workbook.sheetnames:
                 sheet = workbook['세부내역']

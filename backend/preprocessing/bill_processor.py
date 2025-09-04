@@ -191,7 +191,7 @@ class BillProcessor:
                 if os.path.exists(expected_path):
                     return [expected_filename]
                 else:
-                    print(f"❌ 생성된 파일을 찾을 수 없습니다: {expected_path}")
+                    print(f"생성된 파일을 찾을 수 없습니다: {expected_path}")
                     return []
             else:
                 return []

@@ -224,17 +224,17 @@ class AnhousPreprocessor:
             if '통화료' in workbook.sheetnames:
                 sheet = workbook['통화료']
             else:
-                print("❌ 통화료 시트를 찾을 수 없습니다")
+                print("통화료 시트를 찾을 수 없습니다")
                 return None
             
             # 해당 팀의 데이터만 처리
             if template_team not in team_data:
-                print(f"❌ {template_team} 데이터를 찾을 수 없습니다")
+                print(f"{template_team} 데이터를 찾을 수 없습니다")
                 return None
             
             team_dataframes = team_data[template_team]
             if not team_dataframes:
-                print(f"❌ {template_team} 데이터가 없습니다")
+                print(f"{template_team} 데이터가 없습니다")
                 return None
             
             # DataFrame 객체를 직접 사용 (CSV 파일 경로가 아님)
@@ -252,17 +252,22 @@ class AnhousPreprocessor:
             
             # 설정 확인
             h3_value = sheet.cell(row=3, column=8).value
-            print(f"✅ H3 셀에 과금월 설정 완료: {h3_value}")
+            print(f"H3 셀에 과금월 설정 완료: {h3_value}")
+            
+            # B9 셀에 문서번호 설정 (MMP-{년월} 형식)
+            document_number = f"MMP-{date_prefix}"
+            sheet.cell(row=9, column=2).value = f"문서번호 : {document_number}"
+            print(f"B9 셀에 문서번호 설정 완료: {document_number}")
             
             # 시트명과 텍스트 날짜 업데이트
-            print(f"🔧 시트명 및 날짜 텍스트 업데이트 시작")
+            print(f"시트명 및 날짜 텍스트 업데이트 시작")
             self.update_sheet_dates(workbook, year_month)
-            print(f"✅ 시트명 및 날짜 텍스트 업데이트 완료")
+            print(f"시트명 및 날짜 텍스트 업데이트 완료")
             
             # SMS 데이터 처리 및 세부내역 시트 업데이트
             print(f"🔧 SMS 데이터 처리 시작")
             self.process_sms_data(workbook, template_team, csv_files)
-            print(f"✅ SMS 데이터 처리 완료")
+            print(f"SMS 데이터 처리 완료")
             
             # 기존 데이터 지우기 (8행부터)
             for row in range(8, sheet.max_row + 1):

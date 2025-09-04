@@ -9,13 +9,11 @@ from pathlib import Path
 import json
 import tempfile
 
-# 크롤링 모듈들 import
 from backend.data_collection.database import DatabaseManager
 from backend.data_collection.login_manager import LoginManager
 from backend.data_collection.data_manager import DataManager
 from backend.data_collection.new_admin_manager import NewAdminManager
 
-# 지출결의서 자동화 모듈들 import
 from backend.expense_automation.data_processor import ExpenseDataProcessor
 from backend.expense_automation.groupware_bot import GroupwareAutomation
 from backend.data_collection.config import DateConfig, AccountConfig, ElementConfig
@@ -36,13 +34,13 @@ data_manager = DataManager(login_manager)
 new_admin_manager = NewAdminManager(data_manager)
 admin_storage = AdminStorage()
 bill_processor = BillProcessor(admin_storage)
-print("✅ 크롤링 시스템 초기화 완료")
+print("크롤링 시스템 초기화 완료")
 
 # 작업 상태 저장
 task_status = {}
 
-print("🚀 청구자동화 API 서버 시작")
-print("🔧 모드: 실제 크롤링")
+print("청구자동화 API 서버 시작")
+print("모드: 실제 크롤링")
 # 환경에 따라 호스트 자동 설정
 import socket
 def get_host_ip():
@@ -68,7 +66,7 @@ def get_companies():
             "companies": AccountConfig.COMPANIES
         })
     except Exception as e:
-        print(f"❌ 고객사 목록 조회 오류: {e}")
+        print(f"고객사 목록 조회 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
@@ -94,7 +92,7 @@ def collect_data():
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         
-        print(f"🚀 데이터 수집 요청: {company_name}, {start_date} ~ {end_date}")
+        print(f"데이터 수집 요청: {company_name}, {start_date} ~ {end_date}")
         
         if not all([company_name, start_date, end_date]):
             return jsonify({"error": "필수 파라미터 누락"}), 400
@@ -106,7 +104,7 @@ def collect_data():
             "company": company_name,
             "files": [],
             "progress": 0,
-            "log": [f"📋 {company_name} 데이터 수집 시작"],
+            "log": [f" {company_name} 데이터 수집 시작"],
             "crawling_mode": True
         }
         
@@ -122,15 +120,15 @@ def collect_data():
                 # 날짜 설정 (제공되지 않은 경우 기본값 사용)
                 if start_date and end_date:
                     DateConfig.set_dates(start_date, end_date)
-                    task_status[task_id]["log"].append(f"📅 날짜 설정: {start_date} ~ {end_date}")
+                    task_status[task_id]["log"].append(f"날짜 설정: {start_date} ~ {end_date}")
                 else:
                     DateConfig.set_default_dates()
                     dates = DateConfig.get_dates()
-                    task_status[task_id]["log"].append(f"📅 기본 날짜 설정: {dates['start_date']} ~ {dates['end_date']}")
+                    task_status[task_id]["log"].append(f"기본 날짜 설정: {dates['start_date']} ~ {dates['end_date']}")
                 
                 # 1단계: SMS 계정 로그인 및 데이터 수집
                 task_status[task_id]["progress"] = 20
-                task_status[task_id]["log"].append(f"🔐 {company_name} SMS 로그인 시작...")
+                task_status[task_id]["log"].append(f"{company_name} SMS 로그인 시작...")
                 
                 try:
                     # SMS 계정 정보 가져오기
@@ -149,11 +147,11 @@ def collect_data():
                     if not login_success:
                         raise Exception(f"{company_name} SMS 로그인 실패")
                         
-                    task_status[task_id]["log"].append(f"✅ {company_name} SMS 로그인 성공")
+                    task_status[task_id]["log"].append(f"{company_name} SMS 로그인 성공")
                     
                     # SMS 데이터 수집
                     task_status[task_id]["progress"] = 40
-                    task_status[task_id]["log"].append(f"📱 {company_name} SMS 데이터 수집 시작...")
+                    task_status[task_id]["log"].append(f"{company_name} SMS 데이터 수집 시작...")
                     
                     # 실제 SMS 크롤링 실행
                     sms_result = data_manager.download_sms_data(
@@ -184,7 +182,7 @@ def collect_data():
                             recent_sms_files.sort(key=lambda x: x[1])
                             for filename, ctime in recent_sms_files:
                                 task_status[task_id]["files"].append(filename)
-                                task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {filename}")
+                                task_status[task_id]["log"].append(f"SMS 파일 수집 완료: {filename}")
                             
                             # 가장 최근 파일의 시간을 SMS 수집 시간으로 기록
                             if recent_sms_files:
@@ -194,13 +192,13 @@ def collect_data():
                             latest_file = max(xlsx_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
                             task_status[task_id]["sms_collection_time"] = os.path.getctime(os.path.join(download_dir, latest_file))
                             task_status[task_id]["files"].append(latest_file)
-                            task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {latest_file}")
+                            task_status[task_id]["log"].append(f"SMS 파일 수집 완료: {latest_file}")
                     else:
-                        task_status[task_id]["log"].append("⚠️ SMS 데이터 수집 실패 또는 데이터 없음")
+                        task_status[task_id]["log"].append("SMS 데이터 수집 실패 또는 데이터 없음")
                     
                     # 디싸이더스/애드프로젝트인 경우 CHAT 데이터도 수집
                     if company_name == "디싸이더스/애드프로젝트":
-                        task_status[task_id]["log"].append("🗨️ CHAT 데이터 수집 시작...")
+                        task_status[task_id]["log"].append("CHAT 데이터 수집 시작...")
                         try:
                             # 세션 재사용을 위해 세션 종료하지 않고 계속 사용
                             session = login_manager.get_active_session(company_name, "sms")
@@ -223,7 +221,7 @@ def collect_data():
                                     )
                                     alert_button.click()
                                     time.sleep(1)
-                                    task_status[task_id]["log"].append("✅ 알림창 처리 완료")
+                                    task_status[task_id]["log"].append("알림창 처리 완료")
                                 except Exception:
                                     pass
                                 
@@ -241,7 +239,7 @@ def collect_data():
                                 chat_result = data_manager.process_chat_no_brand(driver, target_account.get('config', {}), chat_start, chat_end)
                                 
                                 if chat_result:
-                                    task_status[task_id]["log"].append("✅ CHAT 데이터 수집 완료")
+                                    task_status[task_id]["log"].append("CHAT 데이터 수집 완료")
                                     # CHAT 파일도 수집된 파일 목록에 추가
                                     xlsx_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
                                     # SMS 수집 이후 생성된 파일 찾기 (CHAT 파일)
@@ -249,24 +247,24 @@ def collect_data():
                                     if chat_files:
                                         latest_chat_file = max(chat_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
                                         task_status[task_id]["files"].append(latest_chat_file)
-                                        task_status[task_id]["log"].append(f"✅ CHAT 파일 수집 완료: {latest_chat_file}")
+                                        task_status[task_id]["log"].append(f"CHAT 파일 수집 완료: {latest_chat_file}")
                                     else:
-                                        task_status[task_id]["log"].append("⚠️ CHAT 파일을 찾을 수 없음")
+                                        task_status[task_id]["log"].append(" CHAT 파일을 찾을 수 없음")
                                 else:
-                                    task_status[task_id]["log"].append("⚠️ CHAT 데이터 수집 실패 또는 데이터 없음")
+                                    task_status[task_id]["log"].append(" CHAT 데이터 수집 실패 또는 데이터 없음")
                                     
                             else:
-                                task_status[task_id]["log"].append("❌ SMS 세션을 찾을 수 없어 CHAT 수집 불가")
+                                task_status[task_id]["log"].append(" SMS 세션을 찾을 수 없어 CHAT 수집 불가")
                                 
                         except Exception as chat_error:
-                            task_status[task_id]["log"].append(f"❌ CHAT 수집 중 오류: {str(chat_error)}")
+                            task_status[task_id]["log"].append(f" CHAT 수집 중 오류: {str(chat_error)}")
                     
                     # SMS 세션 종료
                     login_manager.close_session(company_name, "sms")
-                    task_status[task_id]["log"].append(f"🔒 {company_name} SMS 세션 종료")
+                    task_status[task_id]["log"].append(f" {company_name} SMS 세션 종료")
                         
                 except Exception as sms_error:
-                    task_status[task_id]["log"].append(f"❌ SMS 수집 중 오류: {str(sms_error)}")
+                    task_status[task_id]["log"].append(f" SMS 수집 중 오류: {str(sms_error)}")
                     # SMS 실패해도 CALL은 시도
                 
                 # 2단계: 앤하우스인 경우 CALL 데이터도 수집
@@ -291,8 +289,8 @@ def collect_data():
                         if not call_login_success:
                             raise Exception(f"{company_name} CALL 로그인 실패")
                             
-                        task_status[task_id]["log"].append(f"✅ {company_name} CALL 로그인 성공")
-                        task_status[task_id]["log"].append("📞 CALL 데이터 수집 시작...")
+                        task_status[task_id]["log"].append(f" {company_name} CALL 로그인 성공")
+                        task_status[task_id]["log"].append(" CALL 데이터 수집 시작...")
                         
                         call_result = data_manager.setup_call_data_collection(
                             company_name, 
@@ -323,40 +321,40 @@ def collect_data():
                                     # 가장 최근 CALL 파일 선택
                                     latest_call_file = max(call_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
                                     task_status[task_id]["files"].append(latest_call_file)
-                                    task_status[task_id]["log"].append(f"✅ CALL 파일 수집 완료: {latest_call_file}")
+                                    task_status[task_id]["log"].append(f" CALL 파일 수집 완료: {latest_call_file}")
                                 else:
-                                    task_status[task_id]["log"].append("⚠️ CALL 데이터 수집 실패: 새 파일이 생성되지 않음")
+                                    task_status[task_id]["log"].append(" CALL 데이터 수집 실패: 새 파일이 생성되지 않음")
                             else:
                                 # SMS 수집 시간이 없으면 기존 로직 사용
                                 latest_call_file = max(excel_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
                                 task_status[task_id]["files"].append(latest_call_file)
-                                task_status[task_id]["log"].append(f"✅ CALL 파일 수집 완료: {latest_call_file}")
+                                task_status[task_id]["log"].append(f" CALL 파일 수집 완료: {latest_call_file}")
                         else:
-                            task_status[task_id]["log"].append("⚠️ CALL 데이터 수집 실패 또는 데이터 없음")
+                            task_status[task_id]["log"].append(" CALL 데이터 수집 실패 또는 데이터 없음")
                         
                         # CALL 세션 종료
                         login_manager.close_session(company_name, "call")
-                        task_status[task_id]["log"].append(f"🔒 {company_name} CALL 세션 종료")
+                        task_status[task_id]["log"].append(f" {company_name} CALL 세션 종료")
                             
                     except Exception as call_error:
-                        task_status[task_id]["log"].append(f"❌ CALL 수집 중 오류: {str(call_error)}")
+                        task_status[task_id]["log"].append(f" CALL 수집 중 오류: {str(call_error)}")
                 
                 # 완료 처리
                 if task_status[task_id]["files"]:
                     task_status[task_id]["status"] = "completed"
                     task_status[task_id]["progress"] = 100
-                    task_status[task_id]["log"].append("🎉 데이터 수집 완료!")
+                    task_status[task_id]["log"].append(" 데이터 수집 완료!")
                 else:
                     task_status[task_id]["status"] = "completed"
                     task_status[task_id]["progress"] = 100
-                    task_status[task_id]["log"].append("⚠️ 수집된 파일이 없습니다 (데이터 없음 또는 오류)")
+                    task_status[task_id]["log"].append(" 수집된 파일이 없습니다 (데이터 없음 또는 오류)")
                 
-                print(f"✅ {company_name} 크롤링 완료")
+                print(f" {company_name} 크롤링 완료")
                 
             except Exception as e:
                 task_status[task_id]["status"] = "failed"
                 task_status[task_id]["error"] = str(e)
-                task_status[task_id]["log"].append(f"❌ 심각한 오류 발생: {str(e)}")
+                task_status[task_id]["log"].append(f"심각한 오류 발생: {str(e)}")
         
         # 백그라운드에서 실행
         thread = threading.Thread(target=run_real_crawling)
@@ -366,7 +364,7 @@ def collect_data():
         return jsonify({"task_id": task_id, "status": "started"})
         
     except Exception as e:
-        print(f"❌ API 오류: {e}")
+        print(f" API 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/task-status/<task_id>', methods=['GET'])
@@ -376,7 +374,7 @@ def get_task_status(task_id):
         return jsonify({"error": "작업을 찾을 수 없습니다"}), 404
     
     status = task_status[task_id]
-    print(f"📊 Task {task_id[:8]}... 상태: {status['status']} ({status['progress']}%)")
+    print(f"Task {task_id[:8]}... 상태: {status['status']} ({status['progress']}%)")
     return jsonify(status)
 
 @app.route('/api/upload-file', methods=['POST'])
@@ -417,7 +415,7 @@ def upload_file():
                 
                 # 중복 처리 방지: 이미 같은 파일이 있으면 건너뛰기
                 if os.path.exists(filepath):
-                    print(f"⚠️ 이미 존재하는 파일 건너뛰기: {filename}")
+                    print(f"이미 존재하는 파일 건너뛰기: {filename}")
                     return jsonify({
                         "filename": filename, 
                         "file_index": int(file_index),
@@ -531,7 +529,7 @@ def process_file():
         company_name = data.get('company_name')
         collection_date = data.get('collection_date')  # YYYY-MM-DD 형식
         
-        print(f"⚙️ 전처리 시작: {company_name}, {collection_date}")
+        print(f"전처리 시작: {company_name}, {collection_date}")
         
         if not all([company_name, collection_date]):
             return jsonify({"error": "필수 파라미터 누락"}), 400
@@ -653,7 +651,7 @@ def process_file():
         elif company_name == "W컨셉":
             # W컨셉은 라이선스 수량이 필요
             license_count = data.get('license_count', 40)
-            print(f"📊 W컨셉 라이선스 수량: {license_count}개")
+            print(f"W컨셉 라이선스 수량: {license_count}개")
             
             processed_files = bill_processor.process_wconcept(collection_date, license_count)
             
@@ -704,7 +702,7 @@ def process_file():
             return jsonify({"error": f"{company_name}은 전처리를 지원하지 않습니다"}), 400
         
     except Exception as e:
-        print(f"❌ 전처리 오류: {e}")
+        print(f" 전처리 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/upload-bills', methods=['POST'])
@@ -732,7 +730,7 @@ def upload_bills():
             return jsonify({"error": "고지서 처리 실패"}), 500
             
     except Exception as e:
-        print(f"❌ 고지서 업로드 오류: {e}")
+        print(f"고지서 업로드 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/bill-amounts', methods=['GET'])
@@ -742,7 +740,7 @@ def get_bill_amounts():
         amounts = bill_processor.get_bill_amounts()
         return jsonify(amounts)
     except Exception as e:
-        print(f"❌ 통신비 조회 오류: {e}")
+        print(f"통신비 조회 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 # 청구서 결과 영속성 관리 (통합 저장소 사용)
@@ -770,7 +768,7 @@ def get_accounts():
         accounts = db_manager.get_all_accounts()
         return jsonify({"accounts": accounts})
     except Exception as e:
-        print(f"❌ 계정 정보 조회 오류: {e}")
+        print(f"계정 정보 조회 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/accounts/<account_id>', methods=['GET'])
@@ -783,7 +781,7 @@ def get_account(account_id):
         else:
             return jsonify({"error": "계정을 찾을 수 없습니다"}), 404
     except Exception as e:
-        print(f"❌ 계정 정보 조회 오류: {e}")
+        print(f"계정 정보 조회 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/accounts', methods=['POST'])
@@ -794,7 +792,7 @@ def create_account():
         account_id = db_manager.add_account(data)
         return jsonify({"message": "계정이 생성되었습니다", "account_id": account_id}), 201
     except Exception as e:
-        print(f"❌ 계정 생성 오류: {e}")
+        print(f"계정 생성 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/accounts/<account_id>', methods=['PUT'])
@@ -805,7 +803,7 @@ def update_account(account_id):
         db_manager.update_account(account_id, data)
         return jsonify({"message": "계정이 수정되었습니다"})
     except Exception as e:
-        print(f"❌ 계정 수정 오류: {e}")
+        print(f"계정 수정 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/accounts/<account_id>', methods=['DELETE'])
@@ -815,7 +813,7 @@ def delete_account(account_id):
         db_manager.delete_account(account_id)
         return jsonify({"message": "계정이 삭제되었습니다"})
     except Exception as e:
-        print(f"❌ 계정 삭제 오류: {e}")
+        print(f"계정 삭제 오류: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clear-processed-files', methods=['POST'])
@@ -854,7 +852,7 @@ def expense_automation():
         password = request.form.get('password', '')
         
         # 디버깅을 위한 파라미터 로그
-        print(f"📊 받은 파라미터:")
+        print(f"받은 파라미터:")
         print(f"   category: '{category}'")
         print(f"   start_date: '{start_date}'")
         print(f"   end_date: '{end_date}'")
@@ -869,7 +867,7 @@ def expense_automation():
             if not end_date: missing_params.append('end_date')
             if not user_id: missing_params.append('user_id')
             if not password: missing_params.append('password')
-            print(f"❌ 누락된 파라미터: {missing_params}")
+            print(f"누락된 파라미터: {missing_params}")
             return jsonify({"error": f"필수 파라미터가 누락되었습니다: {', '.join(missing_params)}"}), 400
         
         # 날짜 형식 검증
@@ -883,16 +881,16 @@ def expense_automation():
         
         try:
             # 데이터 처리
-            print(f"📊 지출결의서 자동화 시작: {file.filename}")
+            print(f"지출결의서 자동화 시작: {file.filename}")
             data_processor = ExpenseDataProcessor()
             
             # 파일 로드
             data = data_processor.load_file(file_path)
-            print(f"✅ 파일 로드 완료: {len(data)}개 레코드")
+            print(f"파일 로드 완료: {len(data)}개 레코드")
             
             # 데이터 처리
             processed_data = data_processor.process_data(data, category, start_date, end_date)
-            print(f"✅ 데이터 처리 완료: {len(processed_data)}개 레코드")
+            print(f"데이터 처리 완료: {len(processed_data)}개 레코드")
             
             if not processed_data:
                 return jsonify({"error": "처리할 데이터가 없습니다"}), 400
@@ -901,7 +899,7 @@ def expense_automation():
             automation = GroupwareAutomation()
             
             def progress_callback(message):
-                print(f"📈 진행상황: {message}")
+                print(f" 진행상황: {message}")
             
             automation.run_automation(
                 processed_data=processed_data,
@@ -910,7 +908,7 @@ def expense_automation():
                 password=password
             )
             
-            print("🎉 지출결의서 자동화 완료!")
+            print(" 지출결의서 자동화 완료!")
             
             return jsonify({
                 "success": True,
@@ -920,8 +918,8 @@ def expense_automation():
             })
             
         except Exception as e:
-            print(f"❌ 자동화 실행 오류: {e}")
-            print(f"❌ 상세 오류: {traceback.format_exc()}")
+            print(f" 자동화 실행 오류: {e}")
+            print(f" 상세 오류: {traceback.format_exc()}")
             return jsonify({
                 "success": False,
                 "error": f"자동화 실행 중 오류가 발생했습니다: {str(e)}"
@@ -938,8 +936,8 @@ def expense_automation():
                 pass
                 
     except Exception as e:
-        print(f"❌ API 오류: {e}")
-        print(f"❌ 상세 오류: {traceback.format_exc()}")
+        print(f"API 오류: {e}")
+        print(f"상세 오류: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
