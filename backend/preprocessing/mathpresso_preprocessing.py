@@ -35,15 +35,15 @@ class MathpressoPreprocessor:
             )
             
             self.bucket = storage.bucket()
-            print("✅ Firebase Storage 연결 완료")
+            print("Firebase Storage 연결 완료")
         except Exception as e:
-            print(f"❌ Firebase 연결 실패: {e}")
+            print(f"Firebase 연결 실패: {e}")
             self.bucket = None
     
     def download_mathpresso_template(self):
         """Firebase에서 mathpresso.xlsx 템플릿 다운로드"""
         if not self.bucket:
-            print("❌ Firebase 연결이 없습니다")
+            print("Firebase 연결이 없습니다")
             return None
         
         try:
@@ -53,10 +53,10 @@ class MathpressoPreprocessor:
             
             local_path = os.path.join(temp_dir, "mathpresso.xlsx")
             blob.download_to_filename(local_path)
-            print(f"✅ mathpresso.xlsx 템플릿 다운로드 완료: {local_path}")
+            print(f"mathpresso.xlsx 템플릿 다운로드 완료: {local_path}")
             return local_path
         except Exception as e:
-            print(f"❌ mathpresso.xlsx 템플릿 다운로드 실패: {e}")
+            print(f"mathpresso.xlsx 템플릿 다운로드 실패: {e}")
             return None
     
     def get_bill_amount(self, company_name="매스프레소(콴다)"):
@@ -72,19 +72,19 @@ class MathpressoPreprocessor:
                         amount_clean = amount_str.replace(',', '').replace('원', '').strip()
                         if amount_clean.isdigit():
                             amount = float(amount_clean)
-                            print(f"✅ {company_name} 고지서 금액 조회: {amount:,.0f}원")
+                            print(f"{company_name} 고지서 금액 조회: {amount:,.0f}원")
                             return amount
                         else:
-                            print(f"❌ 금액 형식 오류: {amount_str}")
+                            print(f"금액 형식 오류: {amount_str}")
                             return None
                 else:
-                    print(f"❌ {company_name} 고지서 정보를 찾을 수 없습니다")
+                    print(f"{company_name} 고지서 정보를 찾을 수 없습니다")
                     return None
             else:
-                print("❌ 고지서 정보 조회 실패")
+                print("고지서 정보 조회 실패")
                 return None
         except Exception as e:
-            print(f"❌ 고지서 금액 조회 실패: {e}")
+            print(f"고지서 금액 조회 실패: {e}")
             return None
     
     def calculate_amount_without_vat(self, total_amount):
@@ -96,10 +96,10 @@ class MathpressoPreprocessor:
             # 공급가액 = 총금액 / 1.1
             amount_without_vat = total_amount / 1.1
             amount_without_vat_int = round(amount_without_vat)
-            print(f"✅ 부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat_int}원 (쉼표 없이)")
+            print(f"부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat_int}원 (쉼표 없이)")
             return amount_without_vat_int
         except Exception as e:
-            print(f"❌ 부가세 제외 계산 실패: {e}")
+            print(f"부가세 제외 계산 실패: {e}")
             return None
     
     def find_uploaded_file(self, company_name):
@@ -122,16 +122,16 @@ class MathpressoPreprocessor:
                     latest_file = sorted(mathpresso_files, key=lambda x: x[1], reverse=True)[0]
                     filename = latest_file[0]
                     file_path = os.path.join(temp_dir, filename)
-                    print(f"✅ 매스프레소(콴다) 파일 발견: {filename}")
+                    print(f"매스프레소(콴다) 파일 발견: {filename}")
                     return file_path
                 else:
-                    print(f"❌ temp_processing 폴더에서 매스프레소(콴다) 파일을 찾을 수 없습니다")
+                    print(f"temp_processing 폴더에서 매스프레소(콴다) 파일을 찾을 수 없습니다")
             else:
-                print(f"❌ temp_processing 폴더가 존재하지 않습니다: {temp_dir}")
+                print(f"temp_processing 폴더가 존재하지 않습니다: {temp_dir}")
             
             return None
         except Exception as e:
-            print(f"❌ 업로드된 파일 찾기 실패: {e}")
+            print(f" 업로드된 파일 찾기 실패: {e}")
             return None
     
     def convert_xlsx_to_csv_and_count_success(self, xlsx_file_path):
@@ -139,15 +139,15 @@ class MathpressoPreprocessor:
         try:
             # XLSX 파일 읽기
             df = pd.read_excel(xlsx_file_path)
-            print(f"✅ XLSX 파일 읽기 완료: {len(df)}행")
+            print(f" XLSX 파일 읽기 완료: {len(df)}행")
             
             # 필요한 컬럼 확인
             if '발송상태' not in df.columns:
-                print("❌ [발송상태] 컬럼을 찾을 수 없습니다")
+                print("[발송상태] 컬럼을 찾을 수 없습니다")
                 return {}
             
             if '문자유형' not in df.columns:
-                print("❌ [문자유형] 컬럼을 찾을 수 없습니다")
+                print("[문자유형] 컬럼을 찾을 수 없습니다")
                 return {}
             
             # 문자유형별 성공(전달) 건수 카운트
@@ -158,7 +158,7 @@ class MathpressoPreprocessor:
             mms_count = len(success_df[success_df['문자유형'] == 'MMS'])
             talk_count = len(success_df[success_df['문자유형'] == 'TALK'])
             
-            print(f"✅ 문자유형별 성공(전달) 건수:")
+            print(f"문자유형별 성공(전달) 건수:")
             print(f"   - SMS: {sms_count}건")
             print(f"   - LMS: {lms_count}건")
             print(f"   - MMS: {mms_count}건")
@@ -173,7 +173,7 @@ class MathpressoPreprocessor:
             }
                 
         except Exception as e:
-            print(f"❌ XLSX 파일 처리 실패: {e}")
+            print(f"XLSX 파일 처리 실패: {e}")
             return {}
     
     def calculate_meta_ics_usage(self, collection_date):
@@ -194,7 +194,7 @@ class MathpressoPreprocessor:
             metalcs_licenses = metalcs_usage_days / days_in_month
             ssl_vpn_licenses = ssl_vpn_usage_days / days_in_month
             
-            print(f"✅ Meta ICS 사용량 계산:")
+            print(f"Meta ICS 사용량 계산:")
             print(f"   - 해당 월 일수: {days_in_month}일")
             print(f"   - MetaLCS 사용일수: {metalcs_usage_days}일 ({metalcs_accounts}계정 × {days_in_month}일)")
             print(f"   - SSL-VPN 사용일수: {ssl_vpn_usage_days}일 ({ssl_vpn_accounts}계정 × {days_in_month}일)")
@@ -209,7 +209,7 @@ class MathpressoPreprocessor:
                 'ssl_vpn_licenses': ssl_vpn_licenses
             }
         except Exception as e:
-            print(f"❌ Meta ICS 사용량 계산 실패: {e}")
+            print(f"Meta ICS 사용량 계산 실패: {e}")
             return None
     
     def update_mathpresso_template(self, template_path, message_counts, amount_without_vat, collection_date):
@@ -225,7 +225,7 @@ class MathpressoPreprocessor:
             
             # 템플릿 파일 복사
             shutil.copy2(template_path, output_path)
-            print(f"✅ 템플릿 파일 복사 완료: {output_filename}")
+            print(f"템플릿 파일 복사 완료: {output_filename}")
             
             # 워크북 로드
             workbook = load_workbook(output_path)
@@ -234,8 +234,8 @@ class MathpressoPreprocessor:
             document_number = f"MMP-{date_prefix}"
             for sheet in workbook.worksheets:
                 if '세부내역' in sheet.title or '대외공문' in sheet.title:
-                    sheet.cell(row=9, column=2).value = f"문서번호 : {document_number}"
-                    print(f"✅ {sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
+                    sheet.cell(row=9, column=2).value = f"문서번호  : {document_number}"
+                    print(f"{sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
             
             # 1. 대외공문 시트 업데이트 (SK일렉링크와 동일한 로직)
             if '대외공문' in workbook.sheetnames:
@@ -247,7 +247,7 @@ class MathpressoPreprocessor:
                     old_text = b13_cell.value
                     new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                     b13_cell.value = new_text
-                    print(f"✅ 대외공문 B13 셀 업데이트: {old_text} → {new_text}")
+                    print(f"대외공문 B13 셀 업데이트: {old_text} → {new_text}")
                 
                 # B16 셀 업데이트 (B,C,D,E,F,G 16행 병합)
                 b16_cell = doc_sheet.cell(row=16, column=2)
@@ -259,7 +259,7 @@ class MathpressoPreprocessor:
                         if new_text == old_text:
                             new_text = re.sub(r'\d{4}년\s*\d{1,2}월', year_month, old_text)
                     b16_cell.value = new_text
-                    print(f"✅ 대외공문 B16 셀 업데이트: {old_text} → {new_text}")
+                    print(f"대외공문 B16 셀 업데이트: {old_text} → {new_text}")
                 
                 # 하단 테이블 수식 업데이트 (B24, D24, D25)
                 self.update_formula_references(doc_sheet, year_month)
@@ -269,7 +269,7 @@ class MathpressoPreprocessor:
                 if re.match(r'\d{4}년 \d{1,2}월', sheet.title):
                     old_title = sheet.title
                     sheet.title = year_month
-                    print(f"✅ 시트명 변경: {old_title} → {year_month}")
+                    print(f"시트명 변경: {old_title} → {year_month}")
                     
                     # B,C,D,E1 병합 셀의 텍스트 업데이트
                     b1_cell = sheet.cell(row=1, column=2)  # B1 셀
@@ -278,7 +278,7 @@ class MathpressoPreprocessor:
                         new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                         if new_text != old_text:
                             b1_cell.value = new_text
-                            print(f"✅ {year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
+                            print(f"{year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
                     break
             
             # 3. 세부내역 시트 업데이트
@@ -289,42 +289,42 @@ class MathpressoPreprocessor:
                 # E12: SMS, E13: LMS, E14: MMS, E15: TALK
                 if 'sms_count' in message_counts:
                     detail_sheet.cell(row=12, column=5).value = message_counts['sms_count']
-                    print(f"✅ 세부내역 시트 E12 셀 업데이트: {message_counts['sms_count']}건 (SMS)")
+                    print(f"세부내역 시트 E12 셀 업데이트: {message_counts['sms_count']}건 (SMS)")
                 
                 if 'lms_count' in message_counts:
                     detail_sheet.cell(row=13, column=5).value = message_counts['lms_count']
-                    print(f"✅ 세부내역 시트 E13 셀 업데이트: {message_counts['lms_count']}건 (LMS)")
+                    print(f"세부내역 시트 E13 셀 업데이트: {message_counts['lms_count']}건 (LMS)")
                 
                 if 'mms_count' in message_counts:
                     detail_sheet.cell(row=14, column=5).value = message_counts['mms_count']
-                    print(f"✅ 세부내역 시트 E14 셀 업데이트: {message_counts['mms_count']}건 (MMS)")
+                    print(f"세부내역 시트 E14 셀 업데이트: {message_counts['mms_count']}건 (MMS)")
                 
                 if 'talk_count' in message_counts:
                     detail_sheet.cell(row=15, column=5).value = message_counts['talk_count']
-                    print(f"✅ 세부내역 시트 E15 셀 업데이트: {message_counts['talk_count']}건 (TALK)")
+                    print(f"세부내역 시트 E15 셀 업데이트: {message_counts['talk_count']}건 (TALK)")
                 
                 # F4 셀에 부가세 제외 금액 입력 (숫자만)
                 detail_sheet.cell(row=4, column=6).value = amount_without_vat
-                print(f"✅ 세부내역 시트 F4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
+                print(f"세부내역 시트 F4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
                 
                 # Meta ICS 계산 및 업데이트
                 ics_data = self.calculate_meta_ics_usage(collection_date)
                 if ics_data:
                     # E28 셀에 해당 월 일수
                     detail_sheet.cell(row=28, column=5).value = ics_data['days_in_month']
-                    print(f"✅ 세부내역 시트 E28 셀 업데이트: {ics_data['days_in_month']}일")
+                    print(f"세부내역 시트 E28 셀 업데이트: {ics_data['days_in_month']}일")
                     
                     # E30, E31 셀에 사용일수 (수식 대신 직접 계산값)
                     detail_sheet.cell(row=30, column=5).value = ics_data['metalcs_usage_days']
                     detail_sheet.cell(row=31, column=5).value = ics_data['ssl_vpn_usage_days']
-                    print(f"✅ 세부내역 시트 E30 셀 업데이트: {ics_data['metalcs_usage_days']}일 (MetaLCS)")
-                    print(f"✅ 세부내역 시트 E31 셀 업데이트: {ics_data['ssl_vpn_usage_days']}일 (SSL-VPN)")
+                    print(f"세부내역 시트 E30 셀 업데이트: {ics_data['metalcs_usage_days']}일 (MetaLCS)")
+                    print(f"세부내역 시트 E31 셀 업데이트: {ics_data['ssl_vpn_usage_days']}일 (SSL-VPN)")
                     
                     # F30, F31 셀에 사용 라이선스 (E28 셀 참조 방식)
                     detail_sheet.cell(row=30, column=6).value = ics_data['metalcs_licenses']
                     detail_sheet.cell(row=31, column=6).value = ics_data['ssl_vpn_licenses']
-                    print(f"✅ 세부내역 시트 F30 셀 업데이트: {ics_data['metalcs_licenses']}개 (MetaLCS)")
-                    print(f"✅ 세부내역 시트 F31 셀 업데이트: {ics_data['ssl_vpn_licenses']}개 (SSL-VPN)")
+                    print(f"세부내역 시트 F30 셀 업데이트: {ics_data['metalcs_licenses']}개 (MetaLCS)")
+                    print(f"세부내역 시트 F31 셀 업데이트: {ics_data['ssl_vpn_licenses']}개 (SSL-VPN)")
                     
                     # H30~AL30, H31~AL31 셀에 일별 사용량 설정 (1~31일)
                     for day in range(1, 32):
@@ -336,19 +336,19 @@ class MathpressoPreprocessor:
                             detail_sheet.cell(row=30, column=col).value = 0  # MetalCS 나머지는 0
                             detail_sheet.cell(row=31, column=col).value = 0  # SSL-VPN 나머지는 0
                     
-                    print(f"✅ H30~AL30, H31~AL31 셀 일별 사용량 설정 완료 ({ics_data['days_in_month']}일 기준)")
+                    print(f"H30~AL30, H31~AL31 셀 일별 사용량 설정 완료 ({ics_data['days_in_month']}일 기준)")
                     
-                    print(f"✅ Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
+                    print(f"Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
             
             # 파일 저장
             workbook.save(output_path)
             workbook.close()
             
-            print(f"✅ mathpresso.xlsx 템플릿 업데이트 완료: {output_filename}")
+            print(f"mathpresso.xlsx 템플릿 업데이트 완료: {output_filename}")
             return output_path
             
         except Exception as e:
-            print(f"❌ mathpresso.xlsx 템플릿 업데이트 실패: {e}")
+            print(f"mathpresso.xlsx 템플릿 업데이트 실패: {e}")
             return None
     
     def update_formula_references(self, doc_sheet, year_month):
@@ -376,46 +376,46 @@ class MathpressoPreprocessor:
     def process_mathpresso_data(self, collection_date):
         """매스프레소(콴다) 데이터 전처리 메인 함수"""
         try:
-            print("🚀 매스프레소(콴다) 데이터 전처리 시작")
+            print("매스프레소(콴다) 데이터 전처리 시작")
             
             # 1. 고지서 금액 조회
             total_amount = self.get_bill_amount("매스프레소(콴다)")
             if total_amount is None:
-                print("❌ 매스프레소(콴다) 고지서 금액을 찾을 수 없습니다")
+                print(" 매스프레소(콴다) 고지서 금액을 찾을 수 없습니다")
                 return False
             
             # 2. 부가세 제외 금액 계산
             amount_without_vat = self.calculate_amount_without_vat(total_amount)
             if amount_without_vat is None:
-                print("❌ 부가세 제외 계산 실패")
+                print(" 부가세 제외 계산 실패")
                 return False
             
             # 3. 업로드된 파일 찾기
             uploaded_file_path = self.find_uploaded_file("매스프레소(콴다)")
             if uploaded_file_path is None:
-                print("❌ 업로드된 파일을 찾을 수 없습니다")
+                print(" 업로드된 파일을 찾을 수 없습니다")
                 return False
             
             # 4. XLSX 파일을 CSV로 변환하고 문자유형별 성공 건수 카운트
             message_counts = self.convert_xlsx_to_csv_and_count_success(uploaded_file_path)
             if not message_counts:
-                print("❌ 문자유형별 건수 카운트 실패")
+                print("문자유형별 건수 카운트 실패")
                 return False
-            print(f"📊 문자유형별 성공(전달) 건수: {message_counts}")
+            print(f"문자유형별 성공(전달) 건수: {message_counts}")
             
             # 5. mathpresso.xlsx 템플릿 다운로드
             template_path = self.download_mathpresso_template()
             if template_path is None:
-                print("❌ mathpresso.xlsx 템플릿 다운로드 실패")
+                print("mathpresso.xlsx 템플릿 다운로드 실패")
                 return False
             
             # 6. 템플릿 업데이트 및 청구서 생성
             final_invoice_path = self.update_mathpresso_template(template_path, message_counts, amount_without_vat, collection_date)
             if final_invoice_path is None:
-                print("❌ 매스프레소(콴다) 청구서 생성 실패")
+                print("매스프레소(콴다) 청구서 생성 실패")
                 return False
             
-            print(f"✅ 매스프레소(콴다) 전처리 완료! 파일 생성:")
+            print(f"매스프레소(콴다) 전처리 완료! 파일 생성:")
             print(f"   - 매스프레소(콴다) 청구내역서: {os.path.basename(final_invoice_path)}")
             
             # temp_processing 폴더 정리
@@ -439,10 +439,10 @@ class MathpressoPreprocessor:
                     file_path = os.path.join(temp_dir, filename)
                     if os.path.isfile(file_path):
                         os.remove(file_path)
-                        print(f"🗑️ 삭제: {filename}")
+                        print(f"삭제: {filename}")
                 
-                print("✅ temp_processing 폴더 정리 완료")
+                print("temp_processing 폴더 정리 완료")
             else:
-                print("⚠️ temp_processing 폴더가 존재하지 않습니다")
+                print("temp_processing 폴더가 존재하지 않습니다")
         except Exception as e:
-            print(f"❌ 폴더 정리 실패: {e}")
+            print(f"폴더 정리 실패: {e}")

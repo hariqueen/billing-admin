@@ -256,7 +256,7 @@ class AnhousPreprocessor:
             
             # B9 셀에 문서번호 설정 (MMP-{년월} 형식)
             document_number = f"MMP-{date_prefix}"
-            sheet.cell(row=9, column=2).value = f"문서번호 : {document_number}"
+            sheet.cell(row=9, column=2).value = f"문서번호  : {document_number}"
             print(f"B9 셀에 문서번호 설정 완료: {document_number}")
             
             # 시트명과 텍스트 날짜 업데이트

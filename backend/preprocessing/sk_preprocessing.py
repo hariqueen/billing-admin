@@ -34,15 +34,15 @@ class SKPreprocessor:
             )
             
             self.bucket = storage.bucket()
-            print("✅ Firebase Storage 연결 완료")
+            print("Firebase Storage 연결 완료")
         except Exception as e:
-            print(f"❌ Firebase 연결 실패: {e}")
+            print(f"Firebase 연결 실패: {e}")
             self.bucket = None
     
     def download_sk_template(self):
         """Firebase에서 skelectlink.xlsx 템플릿 다운로드"""
         if not self.bucket:
-            print("❌ Firebase 연결이 없습니다")
+            print("Firebase 연결이 없습니다")
             return None
         
         try:
@@ -52,10 +52,10 @@ class SKPreprocessor:
             
             local_path = os.path.join(temp_dir, "skelectlink.xlsx")
             blob.download_to_filename(local_path)
-            print(f"✅ skelectlink.xlsx 템플릿 다운로드 완료: {local_path}")
+            print(f"skelectlink.xlsx 템플릿 다운로드 완료: {local_path}")
             return local_path
         except Exception as e:
-            print(f"❌ skelectlink.xlsx 템플릿 다운로드 실패: {e}")
+            print(f"skelectlink.xlsx 템플릿 다운로드 실패: {e}")
             return None
     
     def get_bill_amount(self, company_name="SK일렉링크"):
@@ -72,19 +72,19 @@ class SKPreprocessor:
                         amount_clean = amount_str.replace(',', '').replace('원', '').strip()
                         if amount_clean.isdigit():
                             amount = float(amount_clean)
-                            print(f"✅ {company_name} 고지서 금액 조회: {amount:,.0f}원")
+                            print(f"{company_name} 고지서 금액 조회: {amount:,.0f}원")
                             return amount
                         else:
-                            print(f"❌ 금액 형식 오류: {amount_str}")
+                            print(f" 금액 형식 오류: {amount_str}")
                             return None
                 else:
-                    print(f"❌ {company_name} 고지서 정보를 찾을 수 없습니다")
+                    print(f" {company_name} 고지서 정보를 찾을 수 없습니다")
                     return None
             else:
-                print("❌ 고지서 정보 조회 실패")
+                print(" 고지서 정보 조회 실패")
                 return None
         except Exception as e:
-            print(f"❌ 고지서 금액 조회 실패: {e}")
+            print(f"고지서 금액 조회 실패: {e}")
             return None
     
     def calculate_amount_without_vat(self, total_amount):
@@ -103,15 +103,15 @@ class SKPreprocessor:
             if difference != 0:
                 # 1원 차이가 있으면 부가세 제외 금액을 보정
                 amount_without_vat += difference
-                print(f"✅ 1원 오차 보정: {difference:+d}원 조정")
+                print(f"1원 오차 보정: {difference:+d}원 조정")
                 
             # 최종 검증
             final_total = round(amount_without_vat * 1.1)
-            print(f"✅ 부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat}원 (검증: {final_total:,}원)")
+            print(f"부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat}원 (검증: {final_total:,}원)")
             
             return amount_without_vat
         except Exception as e:
-            print(f"❌ 부가세 제외 계산 실패: {e}")
+            print(f"부가세 제외 계산 실패: {e}")
             return None
     
     def calculate_meta_ics_usage(self, collection_date):
@@ -132,7 +132,7 @@ class SKPreprocessor:
             metalcs_licenses = metalcs_usage_days / days_in_month
             ssl_vpn_licenses = ssl_vpn_usage_days / days_in_month
             
-            print(f"✅ SK일렉링크 Meta ICS 사용량 계산:")
+            print(f"SK일렉링크 Meta ICS 사용량 계산:")
             print(f"   - 해당 월 일수: {days_in_month}일")
             print(f"   - MetaLCS 사용일수: {metalcs_usage_days}일 ({metalcs_accounts}계정 × {days_in_month}일)")
             print(f"   - SSL-VPN 사용일수: {ssl_vpn_usage_days}일 ({ssl_vpn_accounts}계정 × {days_in_month}일)")
@@ -147,7 +147,7 @@ class SKPreprocessor:
                 'ssl_vpn_licenses': ssl_vpn_licenses
             }
         except Exception as e:
-            print(f"❌ Meta ICS 사용량 계산 실패: {e}")
+            print(f"Meta ICS 사용량 계산 실패: {e}")
             return None
     
     def update_sk_template(self, template_path, amount_without_vat, collection_date, total_amount):
@@ -163,7 +163,7 @@ class SKPreprocessor:
             
             # 템플릿 파일 복사
             shutil.copy2(template_path, output_path)
-            print(f"✅ 템플릿 파일 복사 완료: {output_filename}")
+            print(f" 템플릿 파일 복사 완료: {output_filename}")
             
             # 워크북 로드
             workbook = load_workbook(output_path)
@@ -172,8 +172,8 @@ class SKPreprocessor:
             document_number = f"MMP-{date_prefix}"
             for sheet in workbook.worksheets:
                 if '세부내역' in sheet.title or '대외공문' in sheet.title:
-                    sheet.cell(row=9, column=2).value = f"문서번호 : {document_number}"
-                    print(f"✅ {sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
+                    sheet.cell(row=9, column=2).value = f"문서번호  : {document_number}"
+                    print(f" {sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
             
             # 1. 대외공문 시트 업데이트 (코오롱과 동일한 로직)
             if '대외공문' in workbook.sheetnames:
@@ -185,7 +185,7 @@ class SKPreprocessor:
                     old_text = b13_cell.value
                     new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                     b13_cell.value = new_text
-                    print(f"✅ 대외공문 B13 셀 업데이트: {old_text} → {new_text}")
+                    print(f" 대외공문 B13 셀 업데이트: {old_text} → {new_text}")
                 
                 # B16 셀 업데이트 (B,C,D,E,F,G 16행 병합)
                 b16_cell = doc_sheet.cell(row=16, column=2)
@@ -195,7 +195,7 @@ class SKPreprocessor:
                     if new_text == old_text:
                         new_text = re.sub(r'\d{4}년\d{1,2}월', year_month, old_text)
                     b16_cell.value = new_text
-                    print(f"✅ 대외공문 B16 셀 업데이트: {old_text} → {new_text}")
+                    print(f" 대외공문 B16 셀 업데이트: {old_text} → {new_text}")
                 
                 # 하단 테이블 수식 업데이트 (B24, D24, D25)
                 self.update_formula_references(doc_sheet, year_month)
@@ -205,7 +205,7 @@ class SKPreprocessor:
                 if re.match(r'\d{4}년 \d{1,2}월', sheet.title):
                     old_title = sheet.title
                     sheet.title = year_month
-                    print(f"✅ 시트명 변경: {old_title} → {year_month}")
+                    print(f" 시트명 변경: {old_title} → {year_month}")
                     
                     # B,C,D,E1 병합 셀의 텍스트 업데이트
                     b1_cell = sheet.cell(row=1, column=2)  # B1 셀
@@ -214,7 +214,7 @@ class SKPreprocessor:
                         new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                         if new_text != old_text:
                             b1_cell.value = new_text
-                            print(f"✅ {year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
+                            print(f" {year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
                     break
             
             # 3. 세부내역 시트 업데이트 - E4 셀에 부가세 제외 금액 입력 (쉼표 없이)
@@ -222,11 +222,11 @@ class SKPreprocessor:
                 detail_sheet = workbook['세부내역']
                 # E4 셀에 부가세 제외 금액 입력 (쉼표 없이)
                 detail_sheet.cell(row=4, column=5).value = amount_without_vat
-                print(f"✅ 세부내역 시트 E4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
+                print(f" 세부내역 시트 E4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
                 
                 # E8 셀에 실제 고지서 청구비용 그대로 입력
                 detail_sheet.cell(row=8, column=5).value = total_amount
-                print(f"✅ 세부내역 시트 E8 셀 업데이트: {total_amount}원 (실제 고지서 청구비용)")
+                print(f" 세부내역 시트 E8 셀 업데이트: {total_amount}원 (실제 고지서 청구비용)")
                 
                 # Meta ICS 계산 및 업데이트
                 ics_data = self.calculate_meta_ics_usage(collection_date)
@@ -241,11 +241,11 @@ class SKPreprocessor:
             workbook.save(output_path)
             workbook.close()
             
-            print(f"✅ skelectlink.xlsx 템플릿 업데이트 완료: {output_filename}")
+            print(f" skelectlink.xlsx 템플릿 업데이트 완료: {output_filename}")
             return output_path
             
         except Exception as e:
-            print(f"❌ skelectlink.xlsx 템플릿 업데이트 실패: {e}")
+            print(f" skelectlink.xlsx 템플릿 업데이트 실패: {e}")
             return None
     
     def update_formula_references(self, doc_sheet, year_month):
@@ -265,47 +265,47 @@ class SKPreprocessor:
                     new_formula = re.sub(r"'(\d{4}년 \d{1,2}월)'!", f"'{year_month}'!", old_formula)
                     if new_formula != old_formula:
                         cell.value = new_formula
-                        print(f"✅ 대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
+                        print(f" 대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
                         
         except Exception as e:
-            print(f"❌ 수식 참조 업데이트 오류: {e}")
+            print(f"수식 참조 업데이트 오류: {e}")
     
     def process_sk_data(self, collection_date):
         """SK일렉링크 데이터 전처리 메인 함수"""
         try:
-            print("🚀 SK일렉링크 데이터 전처리 시작")
+            print(" SK일렉링크 데이터 전처리 시작")
             
             # 1. 고지서 금액 조회
             total_amount = self.get_bill_amount("SK일렉링크")
             if total_amount is None:
-                print("❌ SK일렉링크 고지서 금액을 찾을 수 없습니다")
+                print(" SK일렉링크 고지서 금액을 찾을 수 없습니다")
                 return False
             
             # 2. 부가세 제외 금액 계산
             amount_without_vat = self.calculate_amount_without_vat(total_amount)
             if amount_without_vat is None:
-                print("❌ 부가세 제외 계산 실패")
+                print(" 부가세 제외 계산 실패")
                 return False
             
             # 3. skelectlink.xlsx 템플릿 다운로드
             template_path = self.download_sk_template()
             if template_path is None:
-                print("❌ skelectlink.xlsx 템플릿 다운로드 실패")
+                print(" skelectlink.xlsx 템플릿 다운로드 실패")
                 return False
             
             # 4. 템플릿 업데이트 및 청구서 생성
             final_invoice_path = self.update_sk_template(template_path, amount_without_vat, collection_date, total_amount)
             if final_invoice_path is None:
-                print("❌ SK일렉링크 청구서 생성 실패")
+                print("SK일렉링크 청구서 생성 실패")
                 return False
             
-            print(f"✅ SK일렉링크 전처리 완료! 파일 생성:")
+            print(f"SK일렉링크 전처리 완료! 파일 생성:")
             print(f"   - SK일렉링크 청구내역서: {os.path.basename(final_invoice_path)}")
             
             return True
             
         except Exception as e:
             import traceback
-            print(f"❌ SK일렉링크 전처리 실패: {e}")
+            print(f"SK일렉링크 전처리 실패: {e}")
             print(f"상세 에러: {traceback.format_exc()}")
             return False
