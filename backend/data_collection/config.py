@@ -83,32 +83,32 @@ class ElementConfig:
             "remove": [Keys.ESCAPE]  # 브랜드 제거용 키 시퀀스
         },
         "messages": {
-            "start": "🔍 {} 브랜드 처리 시작",
-            "select": "✅ {} 브랜드 선택 완료",
-            "remove": "✅ X버튼 클릭 완료",
-            "complete": "🎉 {} 브랜드 처리 완료",
+            "start": " {} 브랜드 처리 시작",
+            "select": " {} 브랜드 선택 완료",
+            "remove": " X버튼 클릭 완료",
+            "complete": " {} 브랜드 처리 완료",
             "no_data": "마지막 브랜드 {}에서 데이터 없음 - 종료",
-            "error": "❌ {} 브랜드 처리 중 예외 발생: {}"
+            "error": " {} 브랜드 처리 중 예외 발생: {}"
         }
     }
 
     # 상태 메시지
     MESSAGES = {
         "iframe": {
-            "check": "🔍 iframe 확인 중...",
-            "success": "✅ iframe {}로 전환 완료",
-            "error": "❌ iframe이 부족함 (현재 {}개)"
+            "check": " iframe 확인 중...",
+            "success": " iframe {}로 전환 완료",
+            "error": " iframe이 부족함 (현재 {}개)"
         },
         "download": {
-            "start": "✅ 다운로드 시작",
-            "waiting": "⏳ 다운로드 대기 중... ({}/{}초)",
-            "complete": "✅ 다운로드 완료: {}",
-            "timeout": "❌ 다운로드 대기 시간 초과"
+            "start": " 다운로드 시작",
+            "waiting": " 다운로드 대기 중... ({}/{}초)",
+            "complete": " 다운로드 완료: {}",
+            "timeout": " 다운로드 대기 시간 초과"
         },
         "alert": {
             "no_data": "검색된 데이터가 없습니다. 다음 단계로 진행.",
-            "close_success": "✅ 데이터 없음 알림창 처리 완료 (방법: {})",
-            "close_error": "❌ 데이터 없음 알림창 처리 실패"
+            "close_success": " 데이터 없음 알림창 처리 완료 (방법: {})",
+            "close_error": " 데이터 없음 알림창 처리 실패"
         }
     }
 
@@ -159,7 +159,7 @@ class DateConfig:
         date_range = get_previous_month_range()
         cls._start_date = date_range["start_date"]
         cls._end_date = date_range["end_date"]
-        print(f"📅 기본 날짜 설정: {cls._start_date} ~ {cls._end_date}")
+        print(f" 기본 날짜 설정: {cls._start_date} ~ {cls._end_date}")
     
     @classmethod
     def get_dates(cls):

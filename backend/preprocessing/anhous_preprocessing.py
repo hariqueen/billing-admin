@@ -36,9 +36,9 @@ class AnhousPreprocessor:
             )
             
             self.bucket = storage.bucket()
-            print("✅ Firebase Storage 연결 완료")
+            print(" Firebase Storage 연결 완료")
         except Exception as e:
-            print(f"❌ Firebase 연결 실패: {e}")
+            print(f" Firebase 연결 실패: {e}")
             self.bucket = None
     
     def convert_xls_to_csv(self, xls_file_path):
@@ -56,7 +56,7 @@ class AnhousPreprocessor:
                 print(f"   컬럼: {list(df.columns)}")
                 csv_path = xls_file_path.replace('.xlsx', '.csv')
                 df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                print(f"✅ Excel → .csv 변환 완료: {csv_path}")
+                print(f" Excel → .csv 변환 완료: {csv_path}")
                 return csv_path
             else:
                 # XLS 파일 처리 (HTML 내용인지 확인)
@@ -81,25 +81,25 @@ class AnhousPreprocessor:
                         # CSV로 저장
                         csv_path = xls_file_path.replace('.xls', '.csv')
                         df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                        print(f"✅ HTML → .csv 변환 완료: {csv_path}")
+                        print(f" HTML → .csv 변환 완료: {csv_path}")
                         return csv_path
                     else:
                         # 일반 Excel 파일 처리
                         df = pd.read_excel(xls_file_path)
                         csv_path = xls_file_path.replace('.xls', '.csv')
                         df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                        print(f"✅ Excel → .csv 변환 완료: {csv_path}")
+                        print(f" Excel → .csv 변환 완료: {csv_path}")
                         return csv_path
                 except UnicodeDecodeError:
                     # 인코딩 오류 시 Excel로 읽기 시도
                     df = pd.read_excel(xls_file_path)
                     csv_path = xls_file_path.replace('.xls', '.csv')
                     df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                    print(f"✅ Excel → .csv 변환 완료: {csv_path}")
+                    print(f" Excel → .csv 변환 완료: {csv_path}")
                     return csv_path
                 
         except Exception as e:
-            print(f"❌ 변환 실패: {xls_file_path}, 오류: {e}")
+            print(f" 변환 실패: {xls_file_path}, 오류: {e}")
             return None
     
     def convert_all_collected_files(self):
@@ -137,7 +137,7 @@ class AnhousPreprocessor:
         for blob in blobs:
             if 'annhouse' in blob.name.lower():
                 templates.append(blob.name)
-                print(f"✅ 템플릿 발견: {blob.name}")
+                print(f" 템플릿 발견: {blob.name}")
         
         return templates
     
@@ -153,10 +153,10 @@ class AnhousPreprocessor:
             
             local_path = os.path.join(temp_dir, template_name)
             blob.download_to_filename(local_path)
-            print(f"✅ {template_name} 템플릿 다운로드 완료: {local_path}")
+            print(f" {template_name} 템플릿 다운로드 완료: {local_path}")
             return local_path
         except Exception as e:
-            print(f"❌ 템플릿 다운로드 실패: {e}")
+            print(f" 템플릿 다운로드 실패: {e}")
             return None
     
     def get_call_data_by_team(self, csv_files, collection_date):
@@ -170,7 +170,7 @@ class AnhousPreprocessor:
                 
                 if '팀' in list(df.columns):
                     teams = df['팀'].unique()
-                    print(f"📊 CSV 파일 분석: {csv_file}")
+                    print(f" CSV 파일 분석: {csv_file}")
                     print(f"   팀 종류: {teams}")
                     
                     for team in teams:
@@ -178,10 +178,10 @@ class AnhousPreprocessor:
                         if team not in team_data:
                             team_data[team] = []
                         team_data[team].append(team_df)
-                        print(f"   ✅ {team} 데이터: {len(team_df)}행")
+                        print(f"    {team} 데이터: {len(team_df)}행")
                         
             except Exception as e:
-                print(f"❌ CSV 파일 읽기 실패: {csv_file}, 오류: {e}")
+                print(f" CSV 파일 읽기 실패: {csv_file}, 오류: {e}")
         
         return team_data
     
@@ -191,7 +191,7 @@ class AnhousPreprocessor:
             import shutil
             from openpyxl import load_workbook
             
-            print(f"🔧 {template_team} 데이터 처리 중...")
+            print(f"{template_team} 데이터 처리 중...")
             
             # 원본 템플릿 파일 복사
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -244,7 +244,7 @@ class AnhousPreprocessor:
             year_month = f"{date_obj.year}년 {date_obj.month}월"
             
             # H3 셀에 과금월 정보 추가
-            print(f"🔧 H3 셀에 과금월 설정 시도: {year_month}")
+            print(f"   H3 셀에 과금월 설정 시도: {year_month}")
             print(f"   현재 시트: {sheet.title}")
             print(f"   H3 셀 위치: row=3, column=8")
             
@@ -265,7 +265,7 @@ class AnhousPreprocessor:
             print(f"시트명 및 날짜 텍스트 업데이트 완료")
             
             # SMS 데이터 처리 및 세부내역 시트 업데이트
-            print(f"🔧 SMS 데이터 처리 시작")
+            print(f"SMS 데이터 처리 시작")
             self.process_sms_data(workbook, template_team, csv_files)
             print(f"SMS 데이터 처리 완료")
             
@@ -347,7 +347,7 @@ class AnhousPreprocessor:
                     sheet.cell(row=current_row, column=12).value = billing_amount     # L열: 과금금액
                     
                 except Exception as e:
-                    print(f"❌ 계산 오류 (행 {current_row}): {e}")
+                    print(f"계산 오류 (행 {current_row}): {e}")
                 
                 current_row += 1
             
@@ -361,13 +361,13 @@ class AnhousPreprocessor:
             workbook.save(output_path)
             workbook.close()
             
-            print(f"✅ 템플릿 업데이트 완료: {new_filename}")
+            print(f" 템플릿 업데이트 완료: {new_filename}")
             return output_path
             
         except Exception as e:
             import traceback
-            print(f"❌ 템플릿 업데이트 실패: {e}")
-            print(f"🔍 상세 오류: {traceback.format_exc()}")
+            print(f" 템플릿 업데이트 실패: {e}")
+            print(f" 상세 오류: {traceback.format_exc()}")
             return None
     
     def update_sheet_dates(self, workbook, year_month):
@@ -380,7 +380,7 @@ class AnhousPreprocessor:
                 if re.match(r'\d{4}년 \d{1,2}월', sheet.title):
                     old_title = sheet.title
                     sheet.title = year_month
-                    print(f"   📝 시트명 변경: {old_title} → {year_month}")
+                    print(f"   시트명 변경: {old_title} → {year_month}")
                     break
             
             # 2. B1-E1 병합 셀 텍스트 업데이트
@@ -399,7 +399,7 @@ class AnhousPreprocessor:
                     new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                     if new_text != old_text:
                         b1_cell.value = new_text
-                        print(f"   📝 B1 셀 텍스트 변경: {old_text} → {new_text}")
+                        print(f"   B1 셀 텍스트 변경: {old_text} → {new_text}")
             
             # 3. 대외공문 시트의 텍스트 및 수식 업데이트
             if '대외공문' in [sheet.title for sheet in workbook.worksheets]:
@@ -412,7 +412,7 @@ class AnhousPreprocessor:
                     new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
                     if new_text != old_text:
                         b13_cell.value = new_text
-                        print(f"   📝 대외공문 B13 셀 변경: {old_text} → {new_text}")
+                        print(f"   대외공문 B13 셀 변경: {old_text} → {new_text}")
                 
                 # B16 셀 업데이트 (B,C,D,E,F,G 16행 병합)
                 b16_cell = doc_sheet.cell(row=16, column=2)
@@ -423,13 +423,13 @@ class AnhousPreprocessor:
                         new_text = re.sub(r'\d{4}년\d{1,2}월', year_month, old_text)
                     if new_text != old_text:
                         b16_cell.value = new_text
-                        print(f"   📝 대외공문 B16 셀 변경: {old_text} → {new_text}")
+                        print(f"   대외공문 B16 셀 변경: {old_text} → {new_text}")
                 
                 # 수식 업데이트 (시트명 참조 변경)
                 self.update_formula_references(doc_sheet, year_month)
                         
         except Exception as e:
-            print(f"❌ 시트 날짜 업데이트 오류: {e}")
+            print(f" 시트 날짜 업데이트 오류: {e}")
     
     def update_formula_references(self, doc_sheet, year_month):
         """대외공문 시트의 수식에서 시트명 참조 업데이트"""
@@ -453,10 +453,10 @@ class AnhousPreprocessor:
                     new_formula = re.sub(r"'(\d{4}년 \d{1,2}월)'!", f"'{year_month}'!", old_formula)
                     if new_formula != old_formula:
                         cell.value = new_formula
-                        print(f"   📝 대외공문 {chr(64+col)}{row} 셀 수식 변경: {old_formula} → {new_formula}")
+                        print(f"    대외공문 {chr(64+col)}{row} 셀 수식 변경: {old_formula} → {new_formula}")
                         
         except Exception as e:
-            print(f"❌ 수식 참조 업데이트 오류: {e}")
+            print(f" 수식 참조 업데이트 오류: {e}")
     
     def process_sms_data(self, workbook, template_team, csv_files):
         """SMS 데이터 처리 및 세부내역 시트 업데이트"""
@@ -469,20 +469,20 @@ class AnhousPreprocessor:
                     break
             
             if not sms_file:
-                print("   ⚠️ SMS CSV 파일을 찾을 수 없습니다")
-                print(f"   🔍 사용 가능한 파일: {csv_files}")
+                print("    SMS CSV 파일을 찾을 수 없습니다")
+                print(f"   사용 가능한 파일: {csv_files}")
                 return
             
-            print(f"   📂 SMS 파일 발견: {sms_file}")
+            print(f"    SMS 파일 발견: {sms_file}")
             
             # SMS 데이터 읽기 (CSV 파일)
             sms_df = pd.read_csv(sms_file)
-            print(f"   📊 SMS 데이터 로드: {len(sms_df)}행")
-            print(f"   📋 컬럼: {list(sms_df.columns)}")
+            print(f"    SMS 데이터 로드: {len(sms_df)}행")
+            print(f"    컬럼: {list(sms_df.columns)}")
             
             # 발송상태가 "성공(전달)"인 것만 필터링
             success_df = sms_df[sms_df['발송상태'] == '성공(전달)']
-            print(f"   ✅ 성공 전달 건수: {len(success_df)}건")
+            print(f"   성공 전달 건수: {len(success_df)}건")
             
             # 발신번호를 문자열로 변환하고 정리
             success_df['발신번호_정리'] = success_df['발신번호'].astype(str).str.replace('.0', '')
@@ -494,7 +494,7 @@ class AnhousPreprocessor:
                 "사업지원팀": "15880656"
             }
             
-            print(f"   🔍 발신번호 샘플: {success_df['발신번호_정리'].head(10).tolist()}")
+            print(f"    발신번호 샘플: {success_df['발신번호_정리'].head(10).tolist()}")
             
             # 해당 템플릿의 발신번호로 필터링
             target_sender = sender_mapping.get(template_team)
@@ -511,12 +511,12 @@ class AnhousPreprocessor:
             else:
                 team_sms_df = success_df.iloc[0:0]  # 빈 DataFrame
             
-            print(f"   🎯 {template_team} 해당 SMS 건수: {len(team_sms_df)}건")
+            print(f"    {template_team} 해당 SMS 건수: {len(team_sms_df)}건")
             
             # 문자유형별 카운트
             counts = {"SMS": 0, "LMS": 0, "TALK": 0}
             
-            print(f"   📋 문자유형 샘플: {team_sms_df['문자유형'].value_counts().head()}")
+            print(f"    문자유형 샘플: {team_sms_df['문자유형'].value_counts().head()}")
             
             for _, row in team_sms_df.iterrows():
                 msg_type = row.get('문자유형', '')
@@ -528,13 +528,13 @@ class AnhousPreprocessor:
                 elif msg_type == "TALK(알림톡)":
                     counts["TALK"] += 1
             
-            print(f"   📈 SMS: {counts['SMS']}건, LMS/MMS: {counts['LMS']}건, TALK: {counts['TALK']}건")
+            print(f"    SMS: {counts['SMS']}건, LMS/MMS: {counts['LMS']}건, TALK: {counts['TALK']}건")
             
             # 세부내역 시트 업데이트
             self.update_detail_sheet(workbook, counts)
             
         except Exception as e:
-            print(f"❌ SMS 데이터 처리 오류: {e}")
+            print(f"SMS 데이터 처리 오류: {e}")
     
     def update_detail_sheet(self, workbook, counts):
         """세부내역 시트의 D13-D16 셀 업데이트"""
@@ -548,42 +548,42 @@ class AnhousPreprocessor:
                 detail_sheet.cell(row=15, column=4).value = 0                # D15: 0으로 설정
                 detail_sheet.cell(row=16, column=4).value = counts["TALK"]   # D16: 알림톡 건수
                 
-                print(f"   ✅ 세부내역 시트 업데이트 완료 - D13:{counts['SMS']}, D14:{counts['LMS']}, D15:0, D16:{counts['TALK']}")
+                print(f"    세부내역 시트 업데이트 완료 - D13:{counts['SMS']}, D14:{counts['LMS']}, D15:0, D16:{counts['TALK']}")
             else:
-                print("   ⚠️ 세부내역 시트를 찾을 수 없습니다")
+                print("    세부내역 시트를 찾을 수 없습니다")
                 
         except Exception as e:
-            print(f"❌ 세부내역 시트 업데이트 오류: {e}")
+            print(f" 세부내역 시트 업데이트 오류: {e}")
     
     def process_anhous_data(self, collection_date):
         """앤하우스 데이터 전처리 메인 함수"""
         try:
-            print("🚀 앤하우스 데이터 전처리 시작")
+            print(" 앤하우스 데이터 전처리 시작")
             
             # 1. CSV 변환
             csv_files = self.convert_all_collected_files()
-            print(f"✅ 변환 완료: {len(csv_files)}개 파일")
+            print(f" 변환 완료: {len(csv_files)}개 파일")
             
             # 2. 템플릿 찾기
             templates = self.find_anhous_templates()
             if not templates:
-                print("❌ 앤하우스 템플릿 파일을 찾을 수 없습니다")
+                print(" 앤하우스 템플릿 파일을 찾을 수 없습니다")
                 return False
             
             # 3. 팀별 데이터 분류
             team_data = self.get_call_data_by_team(csv_files, collection_date)
             if not team_data:
-                print("❌ 팀별 데이터를 찾을 수 없습니다")
+                print(" 팀별 데이터를 찾을 수 없습니다")
                 return False
             
             # 4. 템플릿 업데이트
-            print("🔧 템플릿 파일 업데이트 중...")
+            print("  템플릿 파일 업데이트 중...")
             print(f"   발견된 템플릿: {templates}")
             print(f"   사용 가능한 팀: {list(team_data.keys())}")
             updated_files = []
             
             for template_name in templates:
-                print(f"🔍 템플릿 처리 시작: {template_name}")
+                print(f" 템플릿 처리 시작: {template_name}")
                 # 팀 매칭
                 template_team = None
                 if 'annhouse_CS' in template_name:
@@ -597,11 +597,11 @@ class AnhousPreprocessor:
                 print(f"   사용 가능한 팀: {list(team_data.keys())}")
                 
                 if template_team and template_team in team_data:
-                    print(f"🔧 {template_name} 템플릿 처리 시작 (팀: {template_team})")
+                    print(f" {template_name} 템플릿 처리 시작 (팀: {template_team})")
                     # 템플릿 다운로드 및 업데이트
                     template_path = self.download_template(template_name)
                     if template_path:
-                        print(f"✅ 템플릿 다운로드 완료: {template_path}")
+                        print(f" 템플릿 다운로드 완료: {template_path}")
                         updated_path = self.update_template_with_team_data(
                             template_path, 
                             {template_team: team_data[template_team]}, 
@@ -611,13 +611,13 @@ class AnhousPreprocessor:
                         )
                         if updated_path:
                             updated_files.append(updated_path)
-                            print(f"✅ 템플릿 업데이트 완료: {updated_path}")
+                            print(f" 템플릿 업데이트 완료: {updated_path}")
                     else:
-                        print(f"❌ 템플릿 다운로드 실패: {template_name}")
+                        print(f" 템플릿 다운로드 실패: {template_name}")
                 else:
-                    print(f"⚠️ 템플릿 매칭 실패: {template_name} (팀: {template_team})")
+                    print(f" 템플릿 매칭 실패: {template_name} (팀: {template_team})")
             
-            print(f"✅ 전처리 완료: {len(updated_files)}개 파일 업데이트")
+            print(f" 전처리 완료: {len(updated_files)}개 파일 업데이트")
             
             # temp_processing 폴더 정리
             self.cleanup_temp_folder()
@@ -625,7 +625,7 @@ class AnhousPreprocessor:
             return True
             
         except Exception as e:
-            print(f"❌ 전처리 실패: {e}")
+            print(f" 전처리 실패: {e}")
             return False
     
     def cleanup_temp_folder(self):
@@ -638,10 +638,10 @@ class AnhousPreprocessor:
                     file_path = os.path.join(temp_dir, filename)
                     if os.path.isfile(file_path):
                         os.remove(file_path)
-                        print(f"🗑️ 삭제: {filename}")
+                        print(f"삭제: {filename}")
                 
-                print("✅ temp_processing 폴더 정리 완료")
+                print(" temp_processing 폴더 정리 완료")
             else:
-                print("⚠️ temp_processing 폴더가 존재하지 않습니다")
+                print(" temp_processing 폴더가 존재하지 않습니다")
         except Exception as e:
-            print(f"❌ 폴더 정리 실패: {e}")
+            print(f" 폴더 정리 실패: {e}")

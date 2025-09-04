@@ -315,10 +315,11 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         return;
       }
       
-      // SMS 파일은 앞쪽에, CHAT 파일은 마지막에 배치
+      // SMS 파일은 앞쪽에, CALL/CHAT 파일은 마지막에 배치
       const smsFiles = collectedFiles.filter(f => f.includes('발송이력'));
+      const callFiles = collectedFiles.filter(f => f.includes('통화내역'));
       const chatFiles = collectedFiles.filter(f => f.includes('채팅'));
-      const allFiles = [...smsFiles, ...chatFiles];
+      const allFiles = [...smsFiles, ...callFiles, ...chatFiles];
 
       console.log(`${companyName} 자동 업로드 시작: ${allFiles.length}개 파일`);
       
@@ -332,7 +333,12 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       // 순차적으로 파일 업로드
       for (let i = 0; i < allFiles.length; i++) {
         const filename = allFiles[i];
-        const fileLabel = filename.includes('채팅') ? 'CHAT 데이터' : 'SMS 데이터';
+        let fileLabel = 'SMS 데이터';
+        if (filename.includes('통화내역')) {
+          fileLabel = 'CALL 데이터';
+        } else if (filename.includes('채팅')) {
+          fileLabel = 'CHAT 데이터';
+        }
         
         try {
           const formData = new FormData();
@@ -349,7 +355,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           const result = await response.json();
           
           if (response.ok) {
-            console.log(`✅ 자동 업로드 완료: ${filename} -> ${result.filename}`);
+            console.log(`자동 업로드 완료: ${filename} -> ${result.filename}`);
             // 파일 업로드 후 상태 업데이트
             setCompanies(prev => prev.map(comp => 
               comp.name === companyName 
@@ -357,10 +363,10 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                 : comp
             ));
           } else {
-            console.error(`❌ 자동 업로드 실패 (${filename}):`, result.error);
+            console.error(`자동 업로드 실패 (${filename}):`, result.error);
           }
         } catch (error) {
-          console.error(`❌ 자동 업로드 오류 (${filename}):`, error);
+          console.error(`자동 업로드 오류 (${filename}):`, error);
         }
       }
       

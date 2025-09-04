@@ -116,7 +116,7 @@ class DataManager:
                     pass
                 
                 # 데이터가 있는 경우 다운로드 진행
-                print("✅ 다운로드 시작")
+                print(" 다운로드 시작")
                 time.sleep(3)
                 
                 # 다운로드 완료 후 파일 확인
@@ -149,7 +149,7 @@ class DataManager:
                     try:
                         alert = driver.find_element(By.CSS_SELECTOR, "button[data-dialog-btn='ok']")
                         alert.click()
-                        print("✅ 브랜드 선택 팝업 닫기 완료")
+                        print(" 브랜드 선택 팝업 닫기 완료")
                         driver.switch_to.default_content()
                         return True
                     except:
@@ -161,7 +161,7 @@ class DataManager:
                     EC.presence_of_element_located((By.CSS_SELECTOR, "button[data-dialog-btn='ok']"))
                 )
                 alert.click()
-                print("✅ 알림창 처리 완료")
+                print("알림창 처리 완료")
                 return True
         except:
             return False
@@ -188,19 +188,19 @@ class DataManager:
                 element.click()
             return True
         except Exception as e:
-            print(f"⚠️ 클릭 실패: {e}")
+            print(f"클릭 실패: {e}")
             return False
     
     def _switch_to_iframe(self, driver, iframe_index):
         """iframe 전환"""
-        print("🔍 iframe 확인 중...")
+        print("iframe 확인 중...")
         iframes = driver.find_elements(By.TAG_NAME, "iframe")
         if iframes and len(iframes) > iframe_index:
             driver.switch_to.frame(iframes[iframe_index])
-            print(f"✅ iframe[{iframe_index}] 전환 완료")
+            print(f"iframe[{iframe_index}] 전환 완료")
             return True
         else:
-            print(f"⚠️ iframe[{iframe_index}] 찾을 수 없음 (전체 {len(iframes)}개)")
+            print(f"iframe[{iframe_index}] 찾을 수 없음 (전체 {len(iframes)}개)")
             return False
     
     def _handle_download(self, driver, button_selector, brand=None):
@@ -215,8 +215,8 @@ class DataManager:
         print(f"🔍 다운로드 버튼 상태: displayed={download_btn.is_displayed()}, enabled={download_btn.is_enabled()}")
         
         if self._click_element(driver, download_btn):
-            print(f"✅ JavaScript로 다운로드 버튼 클릭 성공{brand_text}")
-            print(f"✅ 엑셀 다운로드 시작{brand_text}")
+            print(f"JavaScript로 다운로드 버튼 클릭 성공{brand_text}")
+            print(f"엑셀 다운로드 시작{brand_text}")
             return True
         return False
     
@@ -251,7 +251,7 @@ class DataManager:
             start_date_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, config['start_date_selector'])))
             start_date_input.clear()
             start_date_input.send_keys(start_date)
-            print(f"✅ 시작날짜 입력: {start_date}")
+            print(f"시작날짜 입력: {start_date}")
         
         if end_date:
             end_date_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, config['end_date_selector'])))
@@ -265,7 +265,7 @@ class DataManager:
         for btn in buttons:
             if search_btn_text in btn.text:
                 btn.click()
-                print(f"✅ 검색 실행 ({brand if brand else ''})")
+                print(f"검색 실행 ({brand if brand else ''})")
                 break
         time.sleep(2)
         
@@ -275,7 +275,7 @@ class DataManager:
             before_files = set(os.listdir(download_dir))
             download_btn = driver.find_element(By.CSS_SELECTOR, config['download_btn_selector'])
             download_btn.click()
-            print(f"✅ 엑셀 다운로드 클릭 ({brand if brand else ''})")
+            print(f"엑셀 다운로드 클릭 ({brand if brand else ''})")
             time.sleep(2)
         
         # 데이터 없음 알림 처리
@@ -289,9 +289,9 @@ class DataManager:
                     
                     if not is_last_brand:  # 마지막 브랜드가 아닌 경우에만 확인 버튼 클릭
                         if self._try_click_no_data_alert(driver, wait):
-                            print("✅ 데이터 없음 알림창 확인 버튼 클릭 성공")
+                            print("데이터 없음 알림창 확인 버튼 클릭 성공")
                         else:
-                            print("❌ 데이터 없음 알림창 확인 버튼 클릭 실패")
+                            print("데이터 없음 알림창 확인 버튼 클릭 실패")
                     return False  # 데이터 없음 표시
             except Exception:
                 pass  # 알림창이 없으면 계속 진행
@@ -496,7 +496,7 @@ class DataManager:
                 time.sleep(ElementConfig.WAIT['short'])
                 return True
             except Exception as e:
-                print(f"❌ 메뉴 클릭 실패: {e}")
+                print(f"메뉴 클릭 실패: {e}")
                 return False
         
         # 최초 메뉴 클릭
@@ -511,9 +511,9 @@ class DataManager:
                 driver.switch_to.frame(iframes[ElementConfig.IFRAME['brand_popup_index']])
                 try:
                     driver.find_element(By.CSS_SELECTOR, ElementConfig.COMMON['alert_ok']).click()
-                    print("✅ 브랜드 선택 팝업 닫기 완료")
+                    print("브랜드 선택 팝업 닫기 완료")
                 except Exception as e:
-                    print(f"❌ 브랜드 선택 팝업 닫기 실패: {e}")
+                    print(f"브랜드 선택 팝업 닫기 실패: {e}")
                 driver.switch_to.default_content()
 
             # 각 브랜드별로 처리
