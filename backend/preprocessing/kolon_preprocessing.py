@@ -41,16 +41,16 @@ class KolonPreprocessor:
             
             self.bucket = storage.bucket()
             self.db = firestore.client()
-            print("✅ Firebase Storage 및 Firestore 연결 완료")
+            print("Firebase Storage 및 Firestore 연결 완료")
         except Exception as e:
-            print(f"❌ Firebase 연결 실패: {e}")
+            print(f"Firebase 연결 실패: {e}")
             self.bucket = None
             self.db = None
     
     def download_kolon_template(self):
         """Firebase에서 kolon.xlsx 템플릿 다운로드"""
         if not self.bucket:
-            print("❌ Firebase 연결이 없습니다")
+            print("Firebase 연결이 없습니다")
             return None
         
         try:
@@ -60,10 +60,10 @@ class KolonPreprocessor:
             
             local_path = os.path.join(temp_dir, "kolon.xlsx")
             blob.download_to_filename(local_path)
-            print(f"✅ kolon.xlsx 템플릿 다운로드 완료: {local_path}")
+            print(f"kolon.xlsx 템플릿 다운로드 완료: {local_path}")
             return local_path
         except Exception as e:
-            print(f"❌ kolon.xlsx 템플릿 다운로드 실패: {e}")
+            print(f"kolon.xlsx 템플릿 다운로드 실패: {e}")
             return None
     
     def get_dept_mapping(self):
@@ -104,10 +104,10 @@ class KolonPreprocessor:
                     df = pd.read_csv(xls_file_path)
                     print(f"   데이터 형태: {df.shape[0]}행 x {df.shape[1]}열")
                     print(f"   컬럼: {list(df.columns)}")
-                    print(f"✅ CSV 파일 확인 완료")
+                    print(f"CSV 파일 확인 완료")
                     return xls_file_path
                 except Exception as e:
-                    print(f"❌ CSV 파일 읽기 실패: {e}")
+                    print(f"CSV 파일 읽기 실패: {e}")
                     return None
             elif xls_file_path.endswith('.xlsx'):
                 # Excel 파일 처리
@@ -117,7 +117,7 @@ class KolonPreprocessor:
                 print(f"   컬럼: {list(df.columns)}")
                 csv_path = xls_file_path.replace('.xlsx', '.csv')
                 df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                print(f"✅ Excel → .csv 변환 완료: {csv_path}")
+                print(f"Excel → .csv 변환 완료: {csv_path}")
                 return csv_path
             else:
                 # XLS 파일 처리 (HTML 내용인지 확인)
@@ -137,7 +137,7 @@ class KolonPreprocessor:
                         # 원본 파일명에서 확장자만 변경하여 CSV 저장
                         csv_path = os.path.splitext(xls_file_path)[0] + '.csv'
                         df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                        print(f"✅ HTML → .csv 변환 완료: {csv_path}")
+                        print(f"HTML → .csv 변환 완료: {csv_path}")
                         return csv_path
                     else:
                         # 일반 Excel 파일 처리
@@ -148,7 +148,7 @@ class KolonPreprocessor:
                         # 원본 파일명에서 확장자만 변경하여 CSV 저장
                         csv_path = os.path.splitext(xls_file_path)[0] + '.csv'
                         df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                        print(f"✅ Excel → .csv 변환 완료: {csv_path}")
+                        print(f"Excel → .csv 변환 완료: {csv_path}")
                         return csv_path
                 except UnicodeDecodeError:
                     # 인코딩 오류 시 Excel로 읽기 시도
@@ -158,11 +158,11 @@ class KolonPreprocessor:
                     print(f"   컬럼: {list(df.columns)}")
                     csv_path = xls_file_path.replace('.xls', '.csv')
                     df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-                    print(f"✅ Excel → .csv 변환 완료: {csv_path}")
+                    print(f"Excel → .csv 변환 완료: {csv_path}")
                     return csv_path
                 
         except Exception as e:
-            print(f"❌ 변환 실패: {xls_file_path}, 오류: {e}")
+            print(f"변환 실패: {xls_file_path}, 오류: {e}")
             return None
 
     def parse_korean_datetime(self, date_str):
@@ -201,10 +201,10 @@ class KolonPreprocessor:
             for col in numeric_cols:
                 df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce')
             
-            print("✅ 재경팀 데이터 전처리 완료")
+            print("재경팀 데이터 전처리 완료")
             return df
         except Exception as e:
-            print(f"❌ 재경팀 데이터 전처리 실패: {e}")
+            print(f"재경팀 데이터 전처리 실패: {e}")
             return None
 
     def preprocess_openai_data(self, df):
@@ -256,7 +256,7 @@ class KolonPreprocessor:
             
             # 금액 차이 계산 (0.5 USD 이내만 매칭으로 인정)
             merged["금액차이"] = abs(merged["해외접수달러금액"] - merged["금액(USD)"])
-            print(f"📊 금액 차이 분석:")
+            print(f"금액 차이 분석:")
             if len(merged) > 0:
                 print(f"   최소 차이: {merged['금액차이'].min():.2f}")
                 print(f"   최대 차이: {merged['금액차이'].max():.2f}")
@@ -271,10 +271,10 @@ class KolonPreprocessor:
             # 중복 제거
             matched_data = matched_data.drop_duplicates(subset=["거래ID"])
             
-            print(f"✅ 데이터 매칭 완료 (매칭: {len(matched_data)}건, 미매칭: {len(unmatched_data)}건)")
+            print(f"데이터 매칭 완료 (매칭: {len(matched_data)}건, 미매칭: {len(unmatched_data)}건)")
             return matched_data, unmatched_data
         except Exception as e:
-            print(f"❌ 데이터 매칭 실패: {e}")
+            print(f"데이터 매칭 실패: {e}")
             return None, None
 
     def create_summary_data(self, kolon_df):
@@ -331,11 +331,11 @@ class KolonPreprocessor:
                     summary_data['승인금액(USD)'].append(0)
                     summary_data['승인금액(원화)'].append(0)
             
-            print("✅ 요약 데이터 생성 완료")
+            print("요약 데이터 생성 완료")
             return summary_data
             
         except Exception as e:
-            print(f"❌ 요약 데이터 생성 실패: {e}")
+            print(f"요약 데이터 생성 실패: {e}")
             return None
 
     def save_kolon_excel(self, kolon_df, output_path):
@@ -389,11 +389,11 @@ class KolonPreprocessor:
                 # 2. 코오롱 해외결제 시트
                 kolon_df.to_excel(writer, sheet_name="코오롱 해외결제", index=False)
                 
-            print(f"✅ Excel 파일 저장 완료: {output_path}")
+            print(f"Excel 파일 저장 완료: {output_path}")
             return True
             
         except Exception as e:
-            print(f"❌ Excel 파일 저장 실패: {e}")
+            print(f"Excel 파일 저장 실패: {e}")
             return False
     
     def extract_amount_from_summary(self, excel_path):
@@ -406,16 +406,16 @@ class KolonPreprocessor:
                 amount = amount_cell.value
                 
                 if amount and isinstance(amount, (int, float)):
-                    print(f"✅ 요약 시트 D3 셀에서 금액 추출: {amount:,}원")
+                    print(f"요약 시트 D3 셀에서 금액 추출: {amount:,}원")
                     return float(amount)
                 else:
-                    print(f"❌ D3 셀에서 유효한 금액을 찾을 수 없습니다: {amount}")
+                    print(f"D3 셀에서 유효한 금액을 찾을 수 없습니다: {amount}")
                     return None
             else:
-                print("❌ 요약 시트를 찾을 수 없습니다")
+                print("요약 시트를 찾을 수 없습니다")
                 return None
         except Exception as e:
-            print(f"❌ 금액 추출 실패: {e}")
+            print(f"금액 추출 실패: {e}")
             return None
         finally:
             if 'workbook' in locals():
@@ -437,15 +437,15 @@ class KolonPreprocessor:
             if difference != 0:
                 # 1원 차이가 있으면 부가세 제외 금액을 보정
                 amount_without_vat += difference
-                print(f"✅ 1원 오차 보정: {difference:+d}원 조정")
+                print(f"1원 오차 보정: {difference:+d}원 조정")
                 
             # 최종 검증
             final_total = round(amount_without_vat * 1.1)
-            print(f"✅ 부가세 제외 계산: {total_amount:,}원 → {amount_without_vat:,}원 (검증: {final_total:,}원)")
+            print(f"부가세 제외 계산: {total_amount:,}원 → {amount_without_vat:,}원 (검증: {final_total:,}원)")
             
             return amount_without_vat
         except Exception as e:
-            print(f"❌ 부가세 제외 계산 실패: {e}")
+            print(f"부가세 제외 계산 실패: {e}")
             return None
     
     def calculate_meta_ics_usage(self, collection_date):
@@ -466,7 +466,7 @@ class KolonPreprocessor:
             metalcs_licenses = metalcs_usage_days / days_in_month
             ssl_vpn_licenses = ssl_vpn_usage_days / days_in_month
             
-            print(f"✅ 코오롱 Meta ICS 사용량 계산:")
+            print(f"코오롱 Meta ICS 사용량 계산:")
             print(f"   - 해당 월 일수: {days_in_month}일")
             print(f"   - MetaLCS 사용일수: {metalcs_usage_days}일 ({metalcs_accounts}계정 × {days_in_month}일)")
             print(f"   - SSL-VPN 사용일수: {ssl_vpn_usage_days}일 ({ssl_vpn_accounts}계정 × {days_in_month}일)")
@@ -481,7 +481,7 @@ class KolonPreprocessor:
                 'ssl_vpn_licenses': ssl_vpn_licenses
             }
         except Exception as e:
-            print(f"❌ Meta ICS 사용량 계산 실패: {e}")
+            print(f"Meta ICS 사용량 계산 실패: {e}")
             return None
     
     def update_kolon_template(self, template_path, amount_without_vat, collection_date, total_amount):
@@ -497,7 +497,7 @@ class KolonPreprocessor:
             
             # 템플릿 파일 복사
             shutil.copy2(template_path, output_path)
-            print(f"✅ 템플릿 파일 복사 완료: {output_filename}")
+            print(f"템플릿 파일 복사 완료: {output_filename}")
             
             # 워크북 로드
             workbook = load_workbook(output_path)
@@ -506,8 +506,8 @@ class KolonPreprocessor:
             document_number = f"MMP-{date_prefix}"
             for sheet in workbook.worksheets:
                 if '세부내역' in sheet.title or '대외공문' in sheet.title:
-                    sheet.cell(row=9, column=2).value = f"문서번호 : {document_number}"
-                    print(f"✅ {sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
+                    sheet.cell(row=9, column=2).value = f"문서번호  : {document_number}"
+                    print(f"{sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
             
             # 1. 대외공문 시트 업데이트
             if '대외공문' in workbook.sheetnames:
@@ -735,13 +735,13 @@ class KolonPreprocessor:
                 result_df = result_df[column_order]
                 
                 result_df.to_csv(openai_path, index=False, encoding='utf-8-sig')
-                print(f"✅ OpenAI 매칭결과 CSV 저장 완료: {openai_filename} (총 {len(result_df)}건, 모든 계정 포함)")
+                print(f"OpenAI 매칭결과 CSV 저장 완료: {openai_filename} (총 {len(result_df)}건, 모든 계정 포함)")
                 
                 # 코오롱 계정만 필터링 (코오롱 전용 파일 생성을 위해)
                 kolon_matched_data = matched_data[matched_data['계정'] == '코오롱'].copy()
-                print(f"📊 코오롱 계정 매칭 결과: {len(kolon_matched_data)}건")
+                print(f"코오롱 계정 매칭 결과: {len(kolon_matched_data)}건")
             else:
-                print("❌ 매칭된 데이터가 없어 OpenAI 매칭결과 파일을 생성할 수 없습니다")
+                print("매칭된 데이터가 없어 OpenAI 매칭결과 파일을 생성할 수 없습니다")
                 return False
             
             # 2. 코오롱 전용 요약 보고서 Excel 저장
@@ -750,36 +750,36 @@ class KolonPreprocessor:
                 report_path = os.path.join(self.download_dir, report_filename)
                 
                 if self.save_kolon_excel(kolon_matched_data, report_path):
-                    print(f"✅ 청구내역서 Excel 저장 완료: {report_filename}")
+                    print(f"청구내역서 Excel 저장 완료: {report_filename}")
                     
                     # 3. Firebase에서 kolon.xlsx 템플릿 다운로드 및 청구서 생성
-                    print("🔥 Firebase kolon.xlsx 템플릿 처리 시작")
+                    print("Firebase kolon.xlsx 템플릿 처리 시작")
                 
                     # 3.1. 요약 시트에서 금액 추출
                     total_amount = self.extract_amount_from_summary(report_path)
                     if total_amount is None:
-                        print("❌ 요약 시트에서 금액 추출 실패")
+                        print("요약 시트에서 금액 추출 실패")
                         return False
                     
                     # 3.2. 부가세 제외 금액 계산
                     amount_without_vat = self.calculate_amount_without_vat(total_amount)
                     if amount_without_vat is None:
-                        print("❌ 부가세 제외 계산 실패")
+                        print("부가세 제외 계산 실패")
                         return False
                     
                     # 3.3. kolon.xlsx 템플릿 다운로드
                     template_path = self.download_kolon_template()
                     if template_path is None:
-                        print("❌ kolon.xlsx 템플릿 다운로드 실패")
+                        print("kolon.xlsx 템플릿 다운로드 실패")
                         return False
                     
                     # 3.4. 템플릿 업데이트 및 청구서 생성
                     final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date, total_amount)
                     if final_invoice_path is None:
-                        print("❌ 코오롱 청구서 생성 실패")
+                        print("코오롱 청구서 생성 실패")
                         return False
                     
-                    print(f"✅ 코오롱 전처리 완료! 총 3개 파일 생성:")
+                    print(f"코오롱 전처리 완료! 총 3개 파일 생성:")
                     print(f"   1. OpenAI 매칭결과: {openai_filename} (모든 계정)")
                     print(f"   2. 코오롱 청구내역서: {report_filename}")
                     print(f"   3. 코오롱FnC 상담솔루션 청구내역서: {os.path.basename(final_invoice_path)}")
@@ -789,11 +789,11 @@ class KolonPreprocessor:
                     
                     return True
                 else:
-                    print("❌ 청구내역서 Excel 저장 실패")
+                    print("청구내역서 Excel 저장 실패")
                     return False
             else:
-                print("⚠️ 코오롱 계정 매칭 데이터가 없어 코오롱 전용 파일들을 생성하지 않습니다.")
-                print(f"✅ OpenAI 매칭결과만 생성 완료: {openai_filename} (모든 계정)")
+                print("코오롱 계정 매칭 데이터가 없어 코오롱 전용 파일들을 생성하지 않습니다.")
+                print(f"OpenAI 매칭결과만 생성 완료: {openai_filename} (모든 계정)")
                 
                 # temp_processing 폴더 정리
                 self.cleanup_temp_folder()
@@ -801,7 +801,7 @@ class KolonPreprocessor:
             
         except Exception as e:
             import traceback
-            print(f"❌ 전처리 실패: {e}")
+            print(f"전처리 실패: {e}")
             print(f"상세 에러: {traceback.format_exc()}")
             return False
     
@@ -817,9 +817,9 @@ class KolonPreprocessor:
                         os.remove(file_path)
                         print(f"🗑️ 삭제: {filename}")
                 
-                print("✅ temp_processing 폴더 정리 완료")
+                print("temp_processing 폴더 정리 완료")
             else:
-                print("⚠️ temp_processing 폴더가 존재하지 않습니다")
+                print("temp_processing 폴더가 존재하지 않습니다")
         except Exception as e:
-            print(f"❌ 폴더 정리 실패: {e}")
+            print(f"폴더 정리 실패: {e}")
 

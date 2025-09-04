@@ -48,9 +48,9 @@ class DecidersPreprocessor:
             )
             
             self.bucket = storage.bucket()
-            print("✅ Firebase Storage 연결 완료")
+            print("Firebase Storage 연결 완료")
         except Exception as e:
-            print(f"❌ Firebase 연결 실패: {e}")
+            print(f"Firebase 연결 실패: {e}")
             self.bucket = None
     
     def convert_all_to_csv(self):
@@ -71,14 +71,14 @@ class DecidersPreprocessor:
                             
                             df.to_csv(csv_path, index=False, encoding='utf-8-sig')
                             csv_files.append(csv_path)
-                            print(f"✅ CSV 변환 완료: {csv_filename}")
+                            print(f"CSV 변환 완료: {csv_filename}")
                             
                         except Exception as e:
-                            print(f"❌ CSV 변환 실패: {filename}, 오류: {e}")
+                            print(f"CSV 변환 실패: {filename}, 오류: {e}")
                     
                     elif filename.endswith(".csv"):
                         csv_files.append(file_path)
-                        print(f"✅ CSV 파일 확인: {filename}")
+                        print(f"CSV 파일 확인: {filename}")
         
         return csv_files
     
@@ -102,7 +102,7 @@ class DecidersPreprocessor:
                 other_files.append(csv_file)
         
         if not sms_files:
-            print("⚠️ 발송이력 파일을 찾을 수 없습니다")
+            print("발송이력 파일을 찾을 수 없습니다")
             return None, other_files
         
         # 발송이력 파일들 병합
@@ -112,15 +112,15 @@ class DecidersPreprocessor:
             try:
                 df = pd.read_csv(sms_file, encoding='utf-8-sig')
                 merged_df = pd.concat([merged_df, df], ignore_index=True)
-                print(f"✅ 병합: {os.path.basename(sms_file)} ({len(df)}행)")
+                print(f"병합: {os.path.basename(sms_file)} ({len(df)}행)")
             except Exception as e:
-                print(f"❌ 병합 실패: {sms_file}, 오류: {e}")
+                print(f"병합 실패: {sms_file}, 오류: {e}")
         
         if not merged_df.empty:
             # 병합된 파일 저장
             merged_path = os.path.join("temp_processing", "merged_sms_data.csv")
             merged_df.to_csv(merged_path, index=False, encoding='utf-8-sig')
-            print(f"✅ 발송이력 병합 완료: {len(merged_df)}행")
+            print(f"발송이력 병합 완료: {len(merged_df)}행")
             return merged_path, other_files
         
         return None, other_files
@@ -131,7 +131,7 @@ class DecidersPreprocessor:
             df = pd.read_csv(merged_sms_path, encoding='utf-8-sig')
             
             if '발신번호' not in df.columns:
-                print("❌ 발신번호 컬럼을 찾을 수 없습니다")
+                print("발신번호 컬럼을 찾을 수 없습니다")
                 return None
             
             # 발신번호를 문자열로 변환하고 정리
@@ -147,13 +147,13 @@ class DecidersPreprocessor:
             
             # 미지의 번호가 있으면 알림
             if unknown_senders:
-                print(f"⚠️ 다른번호 감지: {', '.join(unknown_senders)} - 스마트웰 or 유리제로")
+                print(f"다른번호 감지: {', '.join(unknown_senders)} - 스마트웰 or 유리제로")
                 # 실제 환경에서는 팝업으로 표시해야 함
             
             return df
             
         except Exception as e:
-            print(f"❌ 발신번호 분석 실패: {e}")
+            print(f"발신번호 분석 실패: {e}")
             return None
     
     def count_message_types_by_sender(self, df):
@@ -209,7 +209,7 @@ class DecidersPreprocessor:
             
             return local_path
         except Exception as e:
-            print(f"❌ 템플릿 다운로드 실패: {e}")
+            print(f"템플릿 다운로드 실패: {e}")
             return None
     
     def process_chat_list_file(self, csv_files):
@@ -223,7 +223,7 @@ class DecidersPreprocessor:
                 normalized_filename = unicodedata.normalize('NFC', os.path.basename(csv_file))
                 
                 if "채팅진행건리스트" in normalized_filename:
-                    print(f"📊 채팅진행건리스트 파일 처리: {os.path.basename(csv_file)}")
+                    print(f"채팅진행건리스트 파일 처리: {os.path.basename(csv_file)}")
                     
                     df = pd.read_csv(csv_file, encoding='utf-8-sig')
                     
@@ -249,16 +249,16 @@ class DecidersPreprocessor:
                         adproject_count = len(adproject_kakao)
                         adproject_chat_count += adproject_count
                         
-                        print(f"   ✅ 디싸이더스 카카오 채팅: {deciders_count}건")
-                        print(f"   ✅ 애드프로젝트 카카오 채팅: {adproject_count}건")
+                        print(f"   디싸이더스 카카오 채팅: {deciders_count}건")
+                        print(f"   애드프로젝트 카카오 채팅: {adproject_count}건")
                     else:
-                        print(f"   ❌ 필요한 컬럼을 찾을 수 없습니다.")
+                        print(f"   필요한 컬럼을 찾을 수 없습니다.")
             
 
             return deciders_chat_count, adproject_chat_count
             
         except Exception as e:
-            print(f"❌ 채팅진행건리스트 처리 실패: {e}")
+            print(f" 채팅진행건리스트 처리 실패: {e}")
             return 0, 0
 
     def update_template_with_counts(self, template_path, counts, collection_date, invoice_type, chat_count=0):
@@ -289,8 +289,8 @@ class DecidersPreprocessor:
             document_number = f"MMP-{date_prefix}"
             for sheet in workbook.worksheets:
                 if '세부내역' in sheet.title or '대외공문' in sheet.title:
-                    sheet.cell(row=9, column=2).value = f"문서번호 : {document_number}"
-                    print(f"✅ {sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
+                    sheet.cell(row=9, column=2).value = f"문서번호  : {document_number}"
+                    print(f"{sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
             
             # 세부내역 시트에서 데이터 입력
             if '세부내역' in workbook.sheetnames:
@@ -305,9 +305,9 @@ class DecidersPreprocessor:
                 # 디싸이더스와 애드프로젝트 모두 D14 셀에 카카오 채팅 카운트 입력
                 if chat_count > 0:
                     sheet['D14'] = chat_count
-                    print(f"✅ {invoice_type} 카카오 채팅 카운트 입력 - D14: {chat_count}건")
+                    print(f"{invoice_type} 카카오 채팅 카운트 입력 - D14: {chat_count}건")
                 
-                print(f"✅ {invoice_type} 카운트 입력 - SMS:{counts['SMS']}, LMS:{counts['LMS']}, MMS:{counts['MMS']}, TALK:{counts['TALK']}")
+                print(f"{invoice_type} 카운트 입력 - SMS:{counts['SMS']}, LMS:{counts['LMS']}, MMS:{counts['MMS']}, TALK:{counts['TALK']}")
             
             # 파일 저장
             workbook.save(output_path)
@@ -316,7 +316,7 @@ class DecidersPreprocessor:
             return output_filename
             
         except Exception as e:
-            print(f"❌ 템플릿 업데이트 실패: {e}")
+            print(f" 템플릿 업데이트 실패: {e}")
             return None
     
     def cleanup_temp_folder(self):
@@ -331,31 +331,31 @@ class DecidersPreprocessor:
                             os.remove(file_path)
                         except:
                             pass
-                print("✅ temp_processing 폴더 정리 완료")
+                print("temp_processing 폴더 정리 완료")
         except Exception as e:
-            print(f"❌ 폴더 정리 실패: {e}")
+            print(f"폴더 정리 실패: {e}")
     
     def process_deciders_data(self, collection_date):
         """디싸이더스/애드프로젝트 데이터 전처리 메인 함수"""
         try:
-            print("🚀 디싸이더스/애드프로젝트 데이터 전처리 시작")
+            print("디싸이더스/애드프로젝트 데이터 전처리 시작")
             
             # 1. 모든 파일을 CSV로 변환
             csv_files = self.convert_all_to_csv()
             if not csv_files:
-                print("❌ 변환할 파일이 없습니다")
+                print("변환할 파일이 없습니다")
                 return False
             
             # 2. 발송이력 파일들 병합
             merged_sms_path, other_files = self.merge_sms_files(csv_files)
             if not merged_sms_path:
-                print("❌ 발송이력 파일 병합 실패")
+                print("발송이력 파일 병합 실패")
                 return False
             
             # 3. 발신번호 분석
             df = self.analyze_sender_numbers(merged_sms_path)
             if df is None:
-                print("❌ 발신번호 분석 실패")
+                print("발신번호 분석 실패")
                 return False
             
             # 4. 문자유형별 카운트
@@ -394,9 +394,9 @@ class DecidersPreprocessor:
             # 6. 정리
             self.cleanup_temp_folder()
             
-            print(f"✅ 전처리 완료: {len(processed_files)}개 파일 생성")
+            print(f"전처리 완료: {len(processed_files)}개 파일 생성")
             return processed_files
             
         except Exception as e:
-            print(f"❌ 전처리 실패: {e}")
+            print(f"전처리 실패: {e}")
             return False
