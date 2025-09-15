@@ -6,14 +6,26 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from backend.data_collection.database import DatabaseManager
+from backend.data_collection.config import DateConfig
 
 class GuppuTest:
-    def __init__(self):
+    def __init__(self, start_date=None, end_date=None):
         self.driver = None
         self.wait = None
         self.db_manager = DatabaseManager()
+        
+        # 날짜 설정 (제공되지 않으면 기본값 사용)
+        if start_date and end_date:
+            DateConfig.set_dates(start_date, end_date)
+            print(f"📅 사용자 지정 날짜 설정: {start_date} ~ {end_date}")
+        else:
+            # 기본값: 6월 전체
+            DateConfig.set_dates("2025-06-01", "2025-06-30")
+            print("📅 기본 날짜 설정: 2025-06-01 ~ 2025-06-30")
+        
         self.setup_driver()
         
     def setup_driver(self):
@@ -38,6 +50,9 @@ class GuppuTest:
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         self.wait = WebDriverWait(self.driver, 10)
         
+        # 브라우저 위치 설정
+        self.driver.set_window_position(100, 100)
+        
     def login_guppu(self, username, password):
         """구쁘 로그인"""
         try:
@@ -56,10 +71,11 @@ class GuppuTest:
                 print("❌ Firebase에서 구쁘 계정 정보를 찾을 수 없습니다")
                 return False
             
-            # 로그인 페이지로 이동
+            # 로그인 페이지로 이동 (site_url 또는 url 키 확인)
             site_url = guppu_account.get('site_url') or guppu_account.get('url')
             if not site_url:
                 print("❌ 구쁘 사이트 URL이 설정되지 않았습니다")
+                print(f"계정 데이터: {guppu_account}")
                 return False
                 
             self.driver.get(site_url)
@@ -85,18 +101,84 @@ class GuppuTest:
                 agree_checkbox.click()
             print("✅ 비밀서약 준수 체크 완료")
             
+            # 소프트폰 사용 체크박스 해제 (로그인 전에 해제해야 함)
+            self.uncheck_softphone_usage()
+            
             # 로그인 버튼 클릭
             login_btn = self.driver.find_element(By.CSS_SELECTOR, "#loginBtn")
             login_btn.click()
-            print("✅ 로그인 버튼 클릭")
+            print("로그인 버튼 클릭")
             
             # 로그인 성공 확인
             time.sleep(3)
-            print("✅ 구쁘 로그인 완료")
+            print("구쁘 로그인 완료")
+            
             return True
             
         except Exception as e:
             print(f"❌ 로그인 실패: {e}")
+            return False
+    
+    def uncheck_softphone_usage(self):
+        """소프트폰 사용 체크박스 해제 (중복 로그인 방지 해제)"""
+        try:
+            print("🔍 소프트폰 사용 체크박스 확인 중...")
+            
+            # 소프트폰 사용 체크박스 찾기
+            softphone_checkbox = self.driver.find_element(By.CSS_SELECTOR, "#useCti")
+            
+            # 현재 체크 상태 확인
+            is_checked = softphone_checkbox.is_selected()
+            print(f"📋 소프트폰 사용 체크박스 현재 상태: {'체크됨' if is_checked else '체크 안됨'}")
+            
+            if is_checked:
+                print("🔄 소프트폰 사용 체크박스 해제 시도 중...")
+                
+                # 방법 1: JavaScript로 직접 클릭
+                try:
+                    self.driver.execute_script("arguments[0].click();", softphone_checkbox)
+                    time.sleep(1)
+                    print("✅ JavaScript로 소프트폰 사용 체크박스 해제 완료")
+                except Exception as js_error:
+                    print(f"⚠️ JavaScript 클릭 실패: {js_error}")
+                    
+                    # 방법 2: JavaScript로 직접 체크 해제
+                    try:
+                        self.driver.execute_script("arguments[0].checked = false;", softphone_checkbox)
+                        # change 이벤트 트리거
+                        self.driver.execute_script("arguments[0].dispatchEvent(new Event('change', {bubbles: true}));", softphone_checkbox)
+                        time.sleep(1)
+                        print("✅ JavaScript로 소프트폰 사용 체크박스 직접 해제 완료")
+                    except Exception as direct_error:
+                        print(f"⚠️ JavaScript 직접 해제 실패: {direct_error}")
+                        
+                        # 방법 3: ActionChains 사용
+                        try:
+                            actions = ActionChains(self.driver)
+                            actions.move_to_element(softphone_checkbox).click().perform()
+                            time.sleep(1)
+                            print("✅ ActionChains로 소프트폰 사용 체크박스 해제 완료")
+                        except Exception as action_error:
+                            print(f"⚠️ ActionChains 클릭 실패: {action_error}")
+                            return False
+                
+                # 해제 후 상태 확인
+                try:
+                    final_state = softphone_checkbox.is_selected()
+                    if not final_state:
+                        print("✅ 소프트폰 사용 체크박스 해제 확인됨 (중복 로그인 방지 해제)")
+                    else:
+                        print("⚠️ 소프트폰 사용 체크박스가 여전히 체크되어 있습니다")
+                except Exception as check_error:
+                    print(f"⚠️ 최종 상태 확인 실패: {check_error}")
+                    
+            else:
+                print("ℹ️ 소프트폰 사용 체크박스가 이미 해제되어 있습니다")
+            
+            return True
+            
+        except Exception as e:
+            print(f"⚠️ 소프트폰 사용 체크박스 처리 실패: {e}")
             return False
     
     def navigate_to_sms_history(self):
@@ -134,18 +216,29 @@ class GuppuTest:
             print(f"❌ SMS 페이지 이동 실패: {e}")
             return False
     
-    def switch_to_iframe(self, iframe_index=0):
-        """iframe 전환"""
+    def switch_to_iframe(self, target_src_keyword="smsHistory"):
+        """SMS 문자발송이력 iframe으로 전환"""
         try:
-            print("🔍 iframe 확인 중...")
+            print("🔍 SMS iframe 찾기...")
+            
+            # 먼저 기본 프레임으로 전환
+            self.driver.switch_to.default_content()
+            time.sleep(1)
+            
+            # 모든 iframe 찾기
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-            if iframes and len(iframes) > iframe_index:
-                self.driver.switch_to.frame(iframes[iframe_index])
-                print(f"✅ iframe[{iframe_index}] 전환 완료")
-                return True
-            else:
-                print(f"⚠️ iframe[{iframe_index}] 찾을 수 없음 (전체 {len(iframes)}개)")
-                return False
+            
+            # smsHistory 키워드로 직접 찾기
+            for i, iframe in enumerate(iframes):
+                iframe_src = iframe.get_attribute("src")
+                if iframe_src and target_src_keyword in iframe_src:
+                    self.driver.switch_to.frame(iframe)
+                    print(f"✅ SMS iframe[{i}] 전환 완료")
+                    return True
+            
+            print("❌ SMS iframe을 찾을 수 없습니다")
+            return False
+            
         except Exception as e:
             print(f"❌ iframe 전환 실패: {e}")
             return False
@@ -153,25 +246,14 @@ class GuppuTest:
     def get_current_date(self):
         """현재 날짜 확인"""
         try:
-            # 페이지 구조 디버깅
-            print("🔍 페이지 구조 확인 중...")
-            
-            # 모든 input 엘리먼트 확인
-            inputs = self.driver.find_elements(By.TAG_NAME, "input")
-            print(f"📋 페이지의 input 엘리먼트 개수: {len(inputs)}")
-            
-            for i, input_elem in enumerate(inputs[:10]):  # 처음 10개만 확인
-                input_id = input_elem.get_attribute("id")
-                input_name = input_elem.get_attribute("name")
-                input_type = input_elem.get_attribute("type")
-                print(f"  Input {i}: id='{input_id}', name='{input_name}', type='{input_type}'")
             
             # 날짜 관련 엘리먼트 찾기 시도
             date_selectors = [
-                "#startDt",
+                "#pickerViewdt",  # 표시용 날짜 input
+                "#startDt",      # 시작날짜 hidden input
+                "#endDt",        # 종료날짜 hidden input
                 "input[name='startDt']",
-                "input[name='pickerViewdt']",
-                "input[data-picker='start']",
+                "input[data-picker='label']",
                 "input[title='기간']"
             ]
             
@@ -179,7 +261,7 @@ class GuppuTest:
                 try:
                     date_element = self.driver.find_element(By.CSS_SELECTOR, selector)
                     current_date = date_element.get_attribute("value")
-                    print(f"✅ 날짜 엘리먼트 발견: {selector} = {current_date}")
+                    print(f" 날짜 엘리먼트 발견: {selector} = {current_date}")
                     return current_date
                 except:
                     continue
@@ -196,63 +278,49 @@ class GuppuTest:
         try:
             print(f"📅 날짜 범위 설정: {start_date} ~ {end_date}")
             
-            # 페이지 구조 확인
-            print("🔍 날짜 선택기 찾기 중...")
-            
-            # 날짜 선택기 찾기 시도
-            date_picker_selectors = [
-                "#schForm > table > tbody > tr > td:nth-child(2) > div",
-                ".input-date.daterange",
-                "div[data-target='date']",
-                "input[data-picker='label']"
-            ]
-            
-            date_picker = None
-            for selector in date_picker_selectors:
-                try:
-                    date_picker = self.driver.find_element(By.CSS_SELECTOR, selector)
-                    print(f"✅ 날짜 선택기 발견: {selector}")
-                    break
-                except:
-                    continue
-            
-            if not date_picker:
+            # 날짜 선택기 찾기 (성공한 방식만 사용)
+            print("🔍 날짜 선택기 찾기...")
+            try:
+                date_picker = self.driver.find_element(By.CSS_SELECTOR, "#pickerViewdt")
+                print("✅ 날짜 선택기 발견")
+            except:
                 print("❌ 날짜 선택기를 찾을 수 없습니다")
                 return False
             
             # 날짜 선택기 클릭
+            print("🖱️ 날짜 선택기 클릭...")
             date_picker.click()
-            time.sleep(1)
+            time.sleep(3)  # 캘린더 팝업 대기
             
-            # 시작날짜 설정 시도
-            start_date_selectors = ["#startDt", "input[name='startDt']", "input[data-picker='start']"]
-            start_date_input = None
+            # 날짜 설정 (성공한 방법: hidden input 직접 설정)
+            print(f"📅 {start_date} ~ {end_date} 기간으로 날짜 설정...")
             
-            for selector in start_date_selectors:
-                try:
-                    start_date_input = self.driver.find_element(By.CSS_SELECTOR, selector)
-                    self.driver.execute_script("arguments[0].value = arguments[1]", start_date_input, start_date)
-                    print(f"✅ 시작날짜 설정: {start_date}")
-                    break
-                except:
-                    continue
+            # hidden input 필드에 직접 값 설정
+            start_date_input = self.driver.find_element(By.CSS_SELECTOR, "#startDt")
+            self.driver.execute_script("arguments[0].value = arguments[1]", start_date_input, start_date)
             
-            # 종료날짜 설정 시도
-            end_date_selectors = ["#endDt", "input[name='endDt']", "input[data-picker='end']"]
-            end_date_input = None
+            end_date_input = self.driver.find_element(By.CSS_SELECTOR, "#endDt")
+            self.driver.execute_script("arguments[0].value = arguments[1]", end_date_input, end_date)
             
-            for selector in end_date_selectors:
-                try:
-                    end_date_input = self.driver.find_element(By.CSS_SELECTOR, selector)
-                    self.driver.execute_script("arguments[0].value = arguments[1]", end_date_input, end_date)
-                    print(f"✅ 종료날짜 설정: {end_date}")
-                    break
-                except:
-                    continue
+            # 표시용 필드도 업데이트
+            display_input = self.driver.find_element(By.CSS_SELECTOR, "#pickerViewdt")
+            display_value = f"{start_date} ~ {end_date}"
+            self.driver.execute_script("arguments[0].value = arguments[1]", display_input, display_value)
             
-            # 날짜 선택기 외부 클릭하여 닫기
+            print(f"✅ 날짜 설정 완료: {display_value}")
+            
+            # 달력 닫기 (성공한 방법: 외부 클릭)
+            print("🔄 달력 닫기...")
             self.driver.find_element(By.TAG_NAME, "body").click()
-            time.sleep(1)
+            time.sleep(2)
+            
+            # 설정된 값 확인
+            try:
+                final_start = self.driver.find_element(By.CSS_SELECTOR, "#startDt").get_attribute("value")
+                final_end = self.driver.find_element(By.CSS_SELECTOR, "#endDt").get_attribute("value")
+                print(f"📅 최종 설정된 날짜: {final_start} ~ {final_end}")
+            except Exception as e:
+                print(f"⚠️ 최종 날짜 확인 실패: {e}")
             
             return True
             
@@ -260,52 +328,17 @@ class GuppuTest:
             print(f"❌ 날짜 설정 실패: {e}")
             return False
     
-    def navigate_date_calendar(self, direction="next", date_type="start"):
-        """날짜 캘린더에서 이전/다음 버튼으로 날짜 이동"""
-        try:
-            print(f"📅 날짜 캘린더 이동: {direction} ({date_type})")
-            
-            # 날짜 선택기 클릭
-            date_picker = self.driver.find_element(By.CSS_SELECTOR, "#schForm > table > tbody > tr > td:nth-child(2) > div")
-            date_picker.click()
-            time.sleep(1)
-            
-            # 날짜 타입에 따른 선택자 결정
-            if date_type == "start":
-                if direction == "prev":
-                    selector = "body > div:nth-child(6) > div.drp-calendar.left > div.calendar-table > table > thead > tr:nth-child(1) > th.prev.available"
-                else:  # next
-                    selector = "body > div:nth-child(6) > div.drp-calendar.left > div.calendar-table > table > thead > tr:nth-child(1) > th.next.available"
-            else:  # end
-                if direction == "prev":
-                    selector = "body > div:nth-child(6) > div.drp-calendar.right > div.calendar-table > table > thead > tr:nth-child(1) > th.prev.available"
-                else:  # next
-                    selector = "body > div:nth-child(6) > div.drp-calendar.right > div.calendar-table > table > thead > tr:nth-child(1) > th.next.available"
-            
-            # 버튼 클릭
-            nav_button = self.driver.find_element(By.CSS_SELECTOR, selector)
-            nav_button.click()
-            time.sleep(1)
-            
-            print(f"✅ {direction} 버튼 클릭 완료 ({date_type})")
-            return True
-            
-        except Exception as e:
-            print(f"❌ 날짜 캘린더 이동 실패: {e}")
-            return False
-    
     def search_data(self):
         """조회 버튼 클릭"""
         try:
-            print("🔍 조회 버튼 클릭")
+            print("🔍 조회 버튼 클릭...")
             
-            # 조회 버튼 클릭
-            search_btn = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.content-wrap > div.cont-top > div.title-wrap > div > button:nth-child(1)"))
-            )
-            search_btn.click()
-            time.sleep(2)  # 조회 결과 로딩 대기
+            search_btn = self.driver.find_element(By.CSS_SELECTOR, "body > div.content-wrap > div.cont-top > div.title-wrap > div > button:nth-child(1)")
+            self.driver.execute_script("arguments[0].scrollIntoView(true);", search_btn)
+            time.sleep(1)
+            self.driver.execute_script("arguments[0].click();", search_btn)
             
+            time.sleep(3)  # 조회 결과 로딩 대기
             print("✅ 조회 완료")
             return True
             
@@ -322,12 +355,15 @@ class GuppuTest:
             download_dir = os.path.expanduser("~/Downloads")
             before_files = set(os.listdir(download_dir))
             
-            # 엑셀 다운로드 버튼 클릭
-            download_btn = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "body > div.content-wrap > div.cont-top > div.title-wrap > div > button:nth-child(2)"))
-            )
-            download_btn.click()
-            time.sleep(3)  # 다운로드 완료 대기
+            # 엑셀 다운로드 버튼 클릭 (성공한 방식만 사용)
+            print("🔍 엑셀 다운로드 버튼 클릭...")
+            
+            download_btn = self.driver.find_element(By.CSS_SELECTOR, "body > div.content-wrap > div.cont-top > div.title-wrap > div > button:nth-child(2)")
+            self.driver.execute_script("arguments[0].scrollIntoView(true);", download_btn)
+            time.sleep(1)
+            self.driver.execute_script("arguments[0].click();", download_btn)
+            
+            time.sleep(5)  # 다운로드 완료 대기 (더 길게)
             
             # 다운로드 후 파일 개수 확인
             after_files = set(os.listdir(download_dir))
@@ -342,56 +378,6 @@ class GuppuTest:
             
         except Exception as e:
             print(f"❌ 엑셀 다운로드 실패: {e}")
-            return False
-    
-    def logout_guppu(self):
-        """구쁘 로그아웃"""
-        try:
-            print("🚪 구쁘 로그아웃 시작")
-            
-            # 로그아웃 버튼 클릭
-            logout_btn = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "#logoutBtn"))
-            )
-            logout_btn.click()
-            time.sleep(2)  # 팝업 대기
-            
-            # 로그아웃 확인 팝업 처리
-            try:
-                # 팝업 확인 버튼 클릭
-                confirm_btn = self.wait.until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#alert > div > div > div.modal-footer > button:nth-child(2)"))
-                )
-                confirm_btn.click()
-                print("✅ 로그아웃 확인 팝업 처리 완료")
-                time.sleep(2)  # 로그아웃 처리 대기
-                
-            except Exception as popup_error:
-                print(f"⚠️ 팝업 처리 실패, iframe 전환 시도: {popup_error}")
-                
-                # iframe 전환 시도
-                try:
-                    # 기본 iframe으로 돌아가기
-                    self.driver.switch_to.default_content()
-                    time.sleep(1)
-                    
-                    # 팝업 확인 버튼 다시 시도
-                    confirm_btn = self.wait.until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#alert > div > div > div.modal-footer > button:nth-child(2)"))
-                    )
-                    confirm_btn.click()
-                    print("✅ iframe 전환 후 로그아웃 확인 팝업 처리 완료")
-                    time.sleep(2)
-                    
-                except Exception as iframe_error:
-                    print(f"❌ iframe 전환 후에도 팝업 처리 실패: {iframe_error}")
-                    return False
-            
-            print("✅ 구쁘 로그아웃 완료")
-            return True
-            
-        except Exception as e:
-            print(f"❌ 로그아웃 실패: {e}")
             return False
     
     def test_guppu_workflow(self):
@@ -428,7 +414,7 @@ class GuppuTest:
                 return False
             
             # 4. iframe 전환
-            if not self.switch_to_iframe(0):  # 첫 번째 iframe으로 전환
+            if not self.switch_to_iframe("smsHistory"):
                 return False
             
             # 5. 현재 날짜 확인
@@ -436,13 +422,12 @@ class GuppuTest:
             if current_date:
                 print(f"📅 현재 설정된 날짜: {current_date}")
             
-            # 6. 날짜 범위 설정 테스트
-            today = datetime.now()
-            start_date = (today - timedelta(days=7)).strftime("%Y-%m-%d")
-            end_date = today.strftime("%Y-%m-%d")
+            # 6. 날짜 범위 설정 (DateConfig에서 가져오기)
+            dates = DateConfig.get_dates()
+            start_date = dates["start_date"]
+            end_date = dates["end_date"]
             
-            if self.set_date_range(start_date, end_date):
-                print("✅ 날짜 범위 설정 완료")
+            self.set_date_range(start_date, end_date)
             
             # 7. 조회 버튼 클릭
             if not self.search_data():
@@ -452,32 +437,7 @@ class GuppuTest:
             if not self.download_excel():
                 return False
             
-            # 9. 날짜 캘린더 네비게이션 테스트 (선택사항)
-            print("\n📅 날짜 캘린더 네비게이션 테스트")
-            
-            # 시작날짜 다음달로 이동
-            self.navigate_date_calendar("next", "start")
-            time.sleep(1)
-            
-            # 시작날짜 이전달로 이동
-            self.navigate_date_calendar("prev", "start")
-            time.sleep(1)
-            
-            # 종료날짜 다음달로 이동
-            self.navigate_date_calendar("next", "end")
-            time.sleep(1)
-            
-            # 종료날짜 이전달로 이동
-            self.navigate_date_calendar("prev", "end")
-            time.sleep(1)
-            
-            # 10. 로그아웃 (중복 로그인 방지)
-            print("\n🚪 로그아웃 시작")
-            if self.logout_guppu():
-                print("✅ 구쁘 워크플로우 테스트 완료 (로그아웃 성공)")
-            else:
-                print("⚠️ 구쁘 워크플로우 테스트 완료 (로그아웃 실패)")
-            
+            print("\n✅ SMS 문자발송이력 자동화 완료!")
             return True
             
         except Exception as e:
@@ -485,22 +445,35 @@ class GuppuTest:
             return False
         
         finally:
-            # 브라우저를 열어둔 상태로 유지 (수동으로 로그아웃 후 닫기)
-            print("🔍 브라우저를 열어둔 상태로 유지합니다.")
-            print("💡 수동으로 로그아웃 후 브라우저를 닫아주세요.")
-            print("🚪 로그아웃 버튼: #logoutBtn")
-            print("✅ 확인 버튼: #alert > div > div > div.modal-footer > button:nth-child(2)")
+            # 작업 완료 후 브라우저 닫기
+            if hasattr(self, 'driver') and self.driver:
+                self.driver.quit()
+                print("\n✅ 브라우저가 자동으로 닫혔습니다.")
 
-def main():
+def main(start_date=None, end_date=None):
     """메인 실행 함수"""
     print("🎯 구쁘 고객사 테스트 시작")
     
-    guppu_test = GuppuTest()
+    # 날짜 파라미터와 함께 GuppuTest 초기화
+    guppu_test = GuppuTest(start_date, end_date)
     try:
         success = guppu_test.test_guppu_workflow()
         
         if success:
             print("✅ 구쁘 테스트 성공")
+            
+            # 간소화된 워크플로우 완료
+            print("\n" + "="*50)
+            print("✅ SMS 문자발송이력 자동화 완료!")
+            print("="*50)
+            print("📋 완료된 작업:")
+            print("  1. 구쁘 로그인")
+            print("  2. SMS 문자발송이력 페이지 이동")
+            dates = DateConfig.get_dates()
+            print(f"  3. {dates['start_date']} ~ {dates['end_date']} 기간 설정")
+            print("  4. 데이터 조회")
+            print("  5. 엑셀 파일 다운로드")
+            print("="*50)
         else:
             print("❌ 구쁘 테스트 실패")
             
@@ -508,17 +481,31 @@ def main():
         print(f"❌ 테스트 중 오류 발생: {e}")
     
     finally:
-        # 테스트 성공/실패와 관계없이 브라우저를 열어둔 상태로 유지
-        print("🔍 브라우저를 열어둔 상태로 유지합니다.")
-        print("💡 수동으로 로그아웃 후 브라우저를 닫아주세요.")
-        print("🚪 로그아웃 버튼: #logoutBtn")
-        print("✅ 확인 버튼: #alert > div > div > div.modal-footer > button:nth-child(2)")
+        # 작업 완료 후 브라우저 자동 닫기
+        if hasattr(guppu_test, 'driver') and guppu_test.driver:
+            guppu_test.driver.quit()
+            print("\n✅ 프로그램이 완료되어 브라우저가 자동으로 닫혔습니다.")
+
+def run_guppu_collection(start_date=None, end_date=None):
+    """app.py에서 호출할 수 있는 구쁘 데이터 수집 함수"""
+    try:
+        print(f"🎯 구쁘 데이터 수집 시작: {start_date} ~ {end_date}")
         
-        # 무한 대기 (수동으로 종료할 때까지)
-        try:
-            input("엔터 키를 누르면 프로그램이 종료됩니다...")
-        except KeyboardInterrupt:
-            print("\n프로그램이 중단되었습니다.")
+        guppu_test = GuppuTest(start_date, end_date)
+        success = guppu_test.test_guppu_workflow()
+        
+        if success:
+            print("✅ 구쁘 데이터 수집 성공")
+            return True
+        else:
+            print("❌ 구쁘 데이터 수집 실패")
+            return False
+            
+    except Exception as e:
+        print(f"❌ 구쁘 데이터 수집 중 오류: {e}")
+        return False
 
 if __name__ == "__main__":
-    main()
+    # 테스트용 날짜 설정 (6월 전체)
+    # main("2025-06-01", "2025-06-30")  # 특정 날짜로 테스트
+    main()  # 기본 날짜(6월)로 테스트

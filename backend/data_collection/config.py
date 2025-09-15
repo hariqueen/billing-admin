@@ -217,16 +217,16 @@ class AccountConfig:
     """계정별 설정 관리 (중복 없이 단일화)"""
     # 고객사 목록
     COMPANIES = [
-        # ICS 진입 고객사
+        # ICS 진입 고객사 (크롤링 가능)
         "앤하우스",
         "디싸이더스/애드프로젝트",
         "매스프레소(콴다)",
+        "구쁘",
         # 수동 업로드 고객사
         "SK일렉링크",
         "코오롱Fnc",
         "W컨셉",
-        "메디빌더",
-        "구쁘"
+        "메디빌더"
     ]
     
     # SMS 계정 설정
@@ -292,6 +292,23 @@ class AccountConfig:
             "brands": ["콴다"],
             "brand_dropdown_selector": "input[data-ax5autocomplete-display='input']",
             "sms_iframe_index": 1
+        },
+        "구쁘": {
+            "id_selector": "#projUserCd",
+            "pw_selector": "#userPs",
+            "login_btn": "#loginBtn",
+            "need_softphone_off": True,
+            "checkbox_selector": "#agreeCheck",
+            "sms_service_selector": "#sidebar > div > div.top.tab-wrap > ul > li:nth-child(2) > a",
+            "sms_menu_selector": "#menuNav > li:nth-child(5) > a",
+            "sms_history_selector": "#menu_5603 > li:nth-child(2)",
+            "start_date_selector": "#startDt",
+            "end_date_selector": "#endDt",
+            "display_date_selector": "#pickerViewdt",
+            "search_btn_selector": "body > div.content-wrap > div.cont-top > div.title-wrap > div > button:nth-child(1)",
+            "download_btn_selector": "body > div.content-wrap > div.cont-top > div.title-wrap > div > button:nth-child(2)",
+            "sms_iframe_index": 2,
+            "is_guppu": True
         }
     }
     # CALL 계정 설정

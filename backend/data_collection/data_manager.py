@@ -482,6 +482,22 @@ class DataManager:
         def click_menu_chain():
             """메뉴 클릭 체인"""
             try:
+                # 구쁘 전용 처리
+                if config.get('is_guppu'):
+                    # 메뉴 버튼 클릭
+                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_service_selector']))).click()
+                    time.sleep(1)
+                    
+                    # SMS 버튼 클릭
+                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_menu_selector']))).click()
+                    time.sleep(1)
+                    
+                    # 문자발송이력 버튼 클릭
+                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_history_selector']))).click()
+                    time.sleep(2)
+                    return True
+                
+                # 기존 로직 (다른 회사들)
                 # 메뉴 클릭 (볼드워크 등 새 어드민)
                 if config.get('need_menu_click'):
                     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['menu_selector']))).click()
@@ -575,7 +591,11 @@ class DataManager:
                 time.sleep(ElementConfig.WAIT['short'])
         
         else:
-            # 일반 회사 처리
+            # 구쁘 전용 처리
+            if config.get('is_guppu'):
+                return self._process_guppu_sms_data(driver, config, start_date, end_date)
+            
+            # 기존 로직 (다른 회사들)
             print(ElementConfig.MESSAGES['iframe']['check'])
             iframes = driver.find_elements(By.TAG_NAME, "iframe")
             if len(iframes) > ElementConfig.IFRAME['data_index']:
@@ -589,5 +609,95 @@ class DataManager:
                 print(ElementConfig.MESSAGES['iframe']['error'].format(len(iframes)))
                 return False
         
-        print(f"🎉 {company_name} SMS 데이터 수집 완료")
+        print(f"{company_name} SMS 데이터 수집 완료")
         return True
+    
+    def _process_guppu_sms_data(self, driver, config, start_date=None, end_date=None):
+        """구쁘 전용 SMS 데이터 처리"""
+        try:
+            wait = WebDriverWait(driver, 10)
+            
+            # iframe 전환
+            print("🔍 SMS iframe 찾기...")
+            driver.switch_to.default_content()
+            time.sleep(1)
+            
+            iframes = driver.find_elements(By.TAG_NAME, "iframe")
+            target_iframe_index = config.get('sms_iframe_index', 2)
+            
+            for i, iframe in enumerate(iframes):
+                iframe_src = iframe.get_attribute("src")
+                if iframe_src and "smsHistory" in iframe_src:
+                    driver.switch_to.frame(iframe)
+                    print(f"SMS iframe[{i}] 전환 완료")
+                    break
+            else:
+                print("SMS iframe을 찾을 수 없습니다")
+                return False
+            
+            # 현재 날짜 확인
+            try:
+                date_element = driver.find_element(By.CSS_SELECTOR, config['display_date_selector'])
+                current_date = date_element.get_attribute("value")
+                print(f"현재 설정된 날짜: {current_date}")
+            except Exception as e:
+                print(f"날짜 확인 실패: {e}")
+            
+            # 날짜 설정
+            if start_date and end_date:
+                print(f"날짜 범위 설정: {start_date} ~ {end_date}")
+                
+                # 날짜 선택기 클릭
+                date_picker = driver.find_element(By.CSS_SELECTOR, config['display_date_selector'])
+                date_picker.click()
+                time.sleep(3)
+                
+                # hidden input 필드에 직접 값 설정
+                start_date_input = driver.find_element(By.CSS_SELECTOR, config['start_date_selector'])
+                driver.execute_script("arguments[0].value = arguments[1]", start_date_input, start_date)
+                
+                end_date_input = driver.find_element(By.CSS_SELECTOR, config['end_date_selector'])
+                driver.execute_script("arguments[0].value = arguments[1]", end_date_input, end_date)
+                
+                # 표시용 필드도 업데이트
+                display_value = f"{start_date} ~ {end_date}"
+                driver.execute_script("arguments[0].value = arguments[1]", date_picker, display_value)
+                
+                # 달력 닫기
+                driver.find_element(By.TAG_NAME, "body").click()
+                time.sleep(2)
+                
+                print(f"날짜 설정 완료: {display_value}")
+            
+            print("조회 버튼 클릭...")
+            search_btn = driver.find_element(By.CSS_SELECTOR, config['search_btn_selector'])
+            driver.execute_script("arguments[0].scrollIntoView(true);", search_btn)
+            time.sleep(1)
+            driver.execute_script("arguments[0].click();", search_btn)
+            time.sleep(3)
+            print("조회 완료")
+            
+            download_dir = os.path.expanduser("~/Downloads")
+            before_files = set(os.listdir(download_dir))
+            
+            download_btn = driver.find_element(By.CSS_SELECTOR, config['download_btn_selector'])
+            driver.execute_script("arguments[0].scrollIntoView(true);", download_btn)
+            time.sleep(1)
+            driver.execute_script("arguments[0].click();", download_btn)
+            time.sleep(5)
+            
+            after_files = set(os.listdir(download_dir))
+            new_files = after_files - before_files
+            
+            if new_files:
+                print(f"엑셀 다운로드 완료: {list(new_files)}")
+                return True
+            else:
+                print("다운로드된 파일을 찾을 수 없습니다")
+                return False
+                
+        except Exception as e:
+            print(f"구쁘 SMS 데이터 처리 실패: {e}")
+            return False
+        finally:
+            driver.switch_to.default_content()

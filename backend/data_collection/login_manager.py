@@ -22,8 +22,14 @@ class LoginManager:
         driver.maximize_window()
         
         try:
-            # 사이트 접속
-            driver.get(account_data['site_url'])
+            site_url = account_data.get('site_url')
+            if not site_url:
+                print(f"{company_name} 사이트 URL이 설정되지 않았습니다")
+                print(f"계정 데이터 키: {list(account_data.keys())}")
+                driver.quit()
+                return False, None
+                
+            driver.get(site_url)
             wait = WebDriverWait(driver, 10)
             
             # ID 입력
@@ -40,9 +46,19 @@ class LoginManager:
             
             # SMS 계정의 소프트폰 해제 (필요한 경우)
             if account_type == "sms" and config.get('need_softphone_off'):
-                softphone_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#useCti")))
-                softphone_button.click()
-                print("소프트폰 해제 완료")
+                try:
+                    softphone_checkbox = driver.find_element(By.CSS_SELECTOR, "#useCti")
+                    is_checked = softphone_checkbox.is_selected()
+                    
+                    if is_checked:
+                        # JavaScript로 체크박스 해제
+                        driver.execute_script("arguments[0].click();", softphone_checkbox)
+                        time.sleep(1)
+                        print("소프트폰 해제 완료")
+                    else:
+                        print("소프트폰이 이미 해제되어 있습니다")
+                except Exception as e:
+                    print(f"소프트폰 해제 실패: {e}")
             
             # 로그인 버튼 클릭
             login_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['login_btn'])))

@@ -178,9 +178,9 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
             fileLabels: ['데이터 파일 1', '데이터 파일 2']
           },
           '구쁘': {
-            type: 'manual',
-            requiredFileCount: 2,
-            fileLabels: ['데이터 파일 1', '데이터 파일 2']
+            type: 'sms',
+            requiredFileCount: 1,
+            fileLabels: ['SMS 데이터']
           }
         };
 
@@ -276,8 +276,8 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
               : company
           ));
           
-          // 앤하우스, 디싸이더스/애드프로젝트, 매스프레소(콴다)인 경우 수집된 파일들을 자동으로 업로드
-          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)') && status.files && status.files.length > 0) {
+          // 앤하우스, 디싸이더스/애드프로젝트, 매스프레소(콴다), 구쁘인 경우 수집된 파일들을 자동으로 업로드
+          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)' || companyName === '구쁘') && status.files && status.files.length > 0) {
             autoUploadCollectedFiles(companyName, status.files);
           }
         } else if (status.status === 'failed') {
