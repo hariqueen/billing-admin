@@ -1,7 +1,6 @@
 import os
 import shutil
 import pandas as pd
-import calendar
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -88,16 +87,28 @@ class MathpressoPreprocessor:
             return None
     
     def calculate_amount_without_vat(self, total_amount):
-        """부가세 10%를 제외한 금액 계산 (쉼표 없이)"""
+        """부가세 10%를 제외한 금액 계산 (1원 오차 보정 포함)"""
         try:
             # 부가세 포함 금액에서 부가세 제외
             # 총금액 = 공급가액 + 부가세(공급가액의 10%)
             # 총금액 = 공급가액 × 1.1
             # 공급가액 = 총금액 / 1.1
-            amount_without_vat = total_amount / 1.1
-            amount_without_vat_int = round(amount_without_vat)
-            print(f"부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat_int}원 (쉼표 없이)")
-            return amount_without_vat_int
+            amount_without_vat = round(total_amount / 1.1)
+            
+            # 검증: 부가세 제외 금액 + 부가세 = 실제 고지서 금액인지 확인
+            calculated_total = round(amount_without_vat * 1.1)
+            difference = total_amount - calculated_total
+            
+            if difference != 0:
+                # 1원 차이가 있으면 부가세 제외 금액을 보정
+                amount_without_vat += difference
+                print(f"1원 오차 보정: {difference:+d}원 조정")
+                
+            # 최종 검증
+            final_total = round(amount_without_vat * 1.1)
+            print(f"부가세 제외 계산: {total_amount:,.0f}원 → {amount_without_vat}원 (검증: {final_total:,}원)")
+            
+            return amount_without_vat
         except Exception as e:
             print(f"부가세 제외 계산 실패: {e}")
             return None
@@ -176,41 +187,6 @@ class MathpressoPreprocessor:
             print(f"XLSX 파일 처리 실패: {e}")
             return {}
     
-    def calculate_meta_ics_usage(self, collection_date):
-        """Meta ICS 사용량 자동 계산"""
-        try:
-            date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
-            days_in_month = calendar.monthrange(date_obj.year, date_obj.month)[1]
-            
-            # 계정 정보 (고정값)
-            metalcs_accounts = 6
-            ssl_vpn_accounts = 2
-            
-            # 사용일수 계산 (매일 사용 가정)
-            metalcs_usage_days = metalcs_accounts * days_in_month
-            ssl_vpn_usage_days = ssl_vpn_accounts * days_in_month
-            
-            # 라이선스 계산
-            metalcs_licenses = metalcs_usage_days / days_in_month
-            ssl_vpn_licenses = ssl_vpn_usage_days / days_in_month
-            
-            print(f"Meta ICS 사용량 계산:")
-            print(f"   - 해당 월 일수: {days_in_month}일")
-            print(f"   - MetaLCS 사용일수: {metalcs_usage_days}일 ({metalcs_accounts}계정 × {days_in_month}일)")
-            print(f"   - SSL-VPN 사용일수: {ssl_vpn_usage_days}일 ({ssl_vpn_accounts}계정 × {days_in_month}일)")
-            print(f"   - MetaLCS 라이선스: {metalcs_licenses}개")
-            print(f"   - SSL-VPN 라이선스: {ssl_vpn_licenses}개")
-            
-            return {
-                'days_in_month': days_in_month,
-                'metalcs_usage_days': metalcs_usage_days,
-                'ssl_vpn_usage_days': ssl_vpn_usage_days,
-                'metalcs_licenses': metalcs_licenses,
-                'ssl_vpn_licenses': ssl_vpn_licenses
-            }
-        except Exception as e:
-            print(f"Meta ICS 사용량 계산 실패: {e}")
-            return None
     
     def update_mathpresso_template(self, template_path, message_counts, amount_without_vat, collection_date):
         """mathpresso.xlsx 템플릿 파일 업데이트"""
@@ -306,39 +282,6 @@ class MathpressoPreprocessor:
                 # F4 셀에 부가세 제외 금액 입력 (숫자만)
                 detail_sheet.cell(row=4, column=6).value = amount_without_vat
                 print(f"세부내역 시트 F4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
-                
-                # Meta ICS 계산 및 업데이트
-                ics_data = self.calculate_meta_ics_usage(collection_date)
-                if ics_data:
-                    # E28 셀에 해당 월 일수
-                    detail_sheet.cell(row=28, column=5).value = ics_data['days_in_month']
-                    print(f"세부내역 시트 E28 셀 업데이트: {ics_data['days_in_month']}일")
-                    
-                    # E30, E31 셀에 사용일수 (수식 대신 직접 계산값)
-                    detail_sheet.cell(row=30, column=5).value = ics_data['metalcs_usage_days']
-                    detail_sheet.cell(row=31, column=5).value = ics_data['ssl_vpn_usage_days']
-                    print(f"세부내역 시트 E30 셀 업데이트: {ics_data['metalcs_usage_days']}일 (MetaLCS)")
-                    print(f"세부내역 시트 E31 셀 업데이트: {ics_data['ssl_vpn_usage_days']}일 (SSL-VPN)")
-                    
-                    # F30, F31 셀에 사용 라이선스 (E28 셀 참조 방식)
-                    detail_sheet.cell(row=30, column=6).value = ics_data['metalcs_licenses']
-                    detail_sheet.cell(row=31, column=6).value = ics_data['ssl_vpn_licenses']
-                    print(f"세부내역 시트 F30 셀 업데이트: {ics_data['metalcs_licenses']}개 (MetaLCS)")
-                    print(f"세부내역 시트 F31 셀 업데이트: {ics_data['ssl_vpn_licenses']}개 (SSL-VPN)")
-                    
-                    # H30~AL30, H31~AL31 셀에 일별 사용량 설정 (1~31일)
-                    for day in range(1, 32):
-                        col = 7 + day  # H=8, I=9, ..., AL=38
-                        if day <= ics_data['days_in_month']:
-                            detail_sheet.cell(row=30, column=col).value = 1  # MetalCS 해당 월의 일수만큼 1 입력
-                            detail_sheet.cell(row=31, column=col).value = 1  # SSL-VPN 해당 월의 일수만큼 1 입력
-                        else:
-                            detail_sheet.cell(row=30, column=col).value = 0  # MetalCS 나머지는 0
-                            detail_sheet.cell(row=31, column=col).value = 0  # SSL-VPN 나머지는 0
-                    
-                    print(f"H30~AL30, H31~AL31 셀 일별 사용량 설정 완료 ({ics_data['days_in_month']}일 기준)")
-                    
-                    print(f"Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
             
             # 파일 저장
             workbook.save(output_path)
@@ -368,10 +311,10 @@ class MathpressoPreprocessor:
                     new_formula = re.sub(r"'(\d{4}년 \d{1,2}월)'!", f"'{year_month}'!", old_formula)
                     if new_formula != old_formula:
                         cell.value = new_formula
-                        print(f"✅ 대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
+                        print(f"대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
                         
         except Exception as e:
-            print(f"❌ 수식 참조 업데이트 오류: {e}")
+            print(f"수식 참조 업데이트 오류: {e}")
     
     def process_mathpresso_data(self, collection_date):
         """매스프레소(콴다) 데이터 전처리 메인 함수"""

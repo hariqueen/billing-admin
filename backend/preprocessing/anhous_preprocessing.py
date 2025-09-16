@@ -357,6 +357,30 @@ class AnhousPreprocessor:
             sheet.cell(row=29, column=36).value = days_in_month  # AJ29 셀
             print(f"세부내역 시트 AJ29 셀 업데이트: {days_in_month}일")
             
+            # 팀별 ICS 사용 현황 설정
+            aj_col = 36  # AJ열 = 36번째 컬럼
+            ak_col = 37  # AK열 = 37번째 컬럼
+            
+            # 팀별 행 범위 정의
+            team_ranges = {
+                "창업": range(31, 39),  # 31-38행
+                "TS": range(31, 33),    # 31-32행  
+                "CS": range(33, 36)     # 33-35행
+            }
+            
+            # AJ 열: 항상 1로 설정
+            for team_name, row_range in team_ranges.items():
+                for row in row_range:
+                    sheet.cell(row=row, column=aj_col).value = 1
+                print(f"세부내역 시트 AJ{min(row_range)}-{max(row_range)} 셀 업데이트 ({team_name}): 1")
+            
+            # AK 열: 31일까지 있는 월이면 1, 아니면 0
+            ak_value = 1 if days_in_month >= 31 else 0
+            for team_name, row_range in team_ranges.items():
+                for row in row_range:
+                    sheet.cell(row=row, column=ak_col).value = ak_value
+                print(f"세부내역 시트 AK{min(row_range)}-{max(row_range)} 셀 업데이트 ({team_name}): {ak_value} ({'31일 월' if ak_value == 1 else '30일 이하 월'})")
+            
             # 파일 저장
             workbook.save(output_path)
             workbook.close()

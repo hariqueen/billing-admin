@@ -698,6 +698,21 @@ def process_file():
                 })
             else:
                 return jsonify({"error": "전처리 실패"}), 500
+
+        elif company_name == "구쁘":
+            processed_files = bill_processor.process_guppu(collection_date)
+            
+            if processed_files:
+                # 결과 저장
+                save_processed_files(company_name, processed_files)
+                
+                return jsonify({
+                    "message": "전처리 완료",
+                    "company": company_name,
+                    "processed_files": processed_files
+                })
+            else:
+                return jsonify({"error": "전처리 실패"}), 500
         else:
             return jsonify({"error": f"{company_name}은 전처리를 지원하지 않습니다"}), 400
         

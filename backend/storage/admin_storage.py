@@ -18,7 +18,7 @@ class AdminStorage:
                 "processed_files": {}
             }
             self.save_data_direct(default_data)
-            print(f"✅ 기본 저장소 파일 생성: {self.storage_file}")
+            print(f"기본 저장소 파일 생성: {self.storage_file}")
     
     def load_data(self):
         """저장된 데이터 로드 (메모리 캐시 없음)"""
@@ -26,7 +26,7 @@ class AdminStorage:
             with open(self.storage_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"❌ 어드민 데이터 로드 실패: {e}")
+            print(f"어드민 데이터 로드 실패: {e}")
             return {
                 "bill_amounts": {},
                 "processed_files": {}
@@ -37,9 +37,9 @@ class AdminStorage:
         try:
             with open(self.storage_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"✅ 어드민 데이터 저장 완료")
+            print(f"어드민 데이터 저장 완료")
         except Exception as e:
-            print(f"❌ 어드민 데이터 저장 실패: {e}")
+            print(f"어드민 데이터 저장 실패: {e}")
     
     # === 고지서 금액 관련 메서드 ===
     
@@ -59,7 +59,7 @@ class AdminStorage:
             "update_date": update_date
         }
         self.save_data_direct(data)
-        print(f"✅ {company_name} 고지서 금액 업데이트: {amount}")
+        print(f"{company_name} 고지서 금액 업데이트: {amount}")
     
     def batch_update_bill_amounts(self, bill_data):
         """고지서 금액 일괄 업데이트 (파일에서 읽고 저장)"""
@@ -69,7 +69,7 @@ class AdminStorage:
         
         data["bill_amounts"].update(bill_data)
         self.save_data_direct(data)
-        print(f"✅ 고지서 금액 일괄 업데이트: {len(bill_data)}개 고객사")
+        print(f"고지서 금액 일괄 업데이트: {len(bill_data)}개 고객사")
     
     # === 청구서 결과 관련 메서드 ===
     
@@ -89,7 +89,7 @@ class AdminStorage:
             "timestamp": datetime.now().isoformat()
         }
         self.save_data_direct(data)
-        print(f"✅ {company_name} 청구서 결과 저장: {len(processed_files)}개 파일")
+        print(f"{company_name} 청구서 결과 저장: {len(processed_files)}개 파일")
     
     def clear_processed_files(self, company_name):
         """특정 회사의 청구서 결과 초기화 (파일에서 읽고 저장)"""
@@ -97,7 +97,7 @@ class AdminStorage:
         if "processed_files" in data and company_name in data["processed_files"]:
             del data["processed_files"][company_name]
             self.save_data_direct(data)
-            print(f"✅ {company_name} 청구서 결과 초기화")
+            print(f"{company_name} 청구서 결과 초기화")
     
     # === 마이그레이션 메서드 ===
     
@@ -126,7 +126,7 @@ class AdminStorage:
                     if "bill_amounts" not in current_data:
                         current_data["bill_amounts"] = {}
                     current_data["bill_amounts"].update(bill_data)
-                    print(f"✅ 고지서 데이터 마이그레이션: {len(bill_data)}개 고객사")
+                    print(f"고지서 데이터 마이그레이션: {len(bill_data)}개 고객사")
                     migrated_data = True
             
             # 2. processed_files_storage.json에서 마이그레이션
@@ -137,7 +137,7 @@ class AdminStorage:
                     if "processed_files" not in current_data:
                         current_data["processed_files"] = {}
                     current_data["processed_files"].update(processed_data)
-                    print(f"✅ 청구서 결과 데이터 마이그레이션: {len(processed_data)}개 고객사")
+                    print(f"청구서 결과 데이터 마이그레이션: {len(processed_data)}개 고객사")
                     migrated_data = True
             
             # 데이터가 마이그레이션된 경우만 저장
@@ -148,16 +148,16 @@ class AdminStorage:
                 import shutil
                 if os.path.exists(bill_file):
                     shutil.move(bill_file, f"{bill_file}.backup")
-                    print(f"✅ {bill_file} → {bill_file}.backup으로 백업")
+                    print(f"{bill_file} → {bill_file}.backup으로 백업")
                 
                 if os.path.exists(processed_file):
                     shutil.move(processed_file, f"{processed_file}.backup")
-                    print(f"✅ {processed_file} → {processed_file}.backup으로 백업")
+                    print(f"{processed_file} → {processed_file}.backup으로 백업")
                 
-                print("🎉 데이터 마이그레이션 완료!")
+                print("데이터 마이그레이션 완료!")
             
             return True
             
         except Exception as e:
-            print(f"❌ 마이그레이션 실패: {e}")
+            print(f"마이그레이션 실패: {e}")
             return False
