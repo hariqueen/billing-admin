@@ -276,7 +276,7 @@ class DataManager:
             download_btn = driver.find_element(By.CSS_SELECTOR, config['download_btn_selector'])
             download_btn.click()
             print(f"엑셀 다운로드 클릭 ({brand if brand else ''})")
-            time.sleep(2)
+            time.sleep(0.2)
         
         # 데이터 없음 알림 처리
         if brand:  # 브랜드가 있는 경우
@@ -301,7 +301,7 @@ class DataManager:
         
         # 다운로드 완료 대기 (최대 30초)
         if config.get('download_btn_selector'):
-            max_wait = 30
+            max_wait = 1
             check_interval = 1
             downloaded = False
             for i in range(max_wait):
@@ -312,7 +312,7 @@ class DataManager:
                     if (file.endswith('.xlsx') or file.endswith('.xls')) and not file.endswith('.crdownload'):
                         file_path = os.path.join(download_dir, file)
                         prev_size = os.path.getsize(file_path)
-                        time.sleep(2)
+                        time.sleep(0.2)
                         if os.path.getsize(file_path) == prev_size and prev_size > 0:
                             print(f"다운로드 완료: {file}")
                             downloaded = True
@@ -452,7 +452,7 @@ class DataManager:
                         excel_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ElementConfig.CHAT["excel_btn"])))
                         excel_btn.click()
                         print("엑셀 다운로드 버튼 클릭")
-                        time.sleep(2)
+                        time.sleep(0.2)
                     except Exception as e:
                         print(f"엑셀 다운로드 버튼 클릭 실패: {e}")
             else:

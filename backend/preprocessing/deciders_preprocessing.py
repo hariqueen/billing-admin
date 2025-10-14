@@ -285,6 +285,17 @@ class DecidersPreprocessor:
             # 워크북 로드
             workbook = load_workbook(output_path)
             
+            # 수집 날짜로부터 년월 정보 생성
+            year_month = f"{date_obj.year}년 {date_obj.month:02d}월"
+            
+            # 시트명 변경 (예: "2025년 08월" → 수집한 달로 변경)
+            for sheet in workbook.worksheets:
+                if re.match(r'\d{4}년 \d{1,2}월', sheet.title):
+                    old_title = sheet.title
+                    sheet.title = year_month
+                    print(f"{invoice_type} 시트명 변경: {old_title} → {year_month}")
+                    break
+            
             # B9 셀에 문서번호 설정 (MMP-{년월} 형식)
             document_number = f"MMP-{date_prefix}"
             for sheet in workbook.worksheets:

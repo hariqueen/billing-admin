@@ -1,64 +1,67 @@
 {
   "bill_amounts": {
+    "앤하우스": {
+      "amount": "48,720원",
+      "update_date": "10/14",
+      "image_path": "bill_images/앤하우스_20251014_통신비.pdf"
+    },
+    "디싸이더스": {
+      "amount": "",
+      "update_date": "",
+      "image_path": ""
+    },
     "SK일렉링크": {
-      "amount": "82,390원",
-      "update_date": "09/01"
+      "amount": "73,040원",
+      "update_date": "10/14",
+      "image_path": "bill_images/SK일렉링크_20251014_통신비.pdf"
     },
     "구쁘": {
-      "amount": "55,850원",
-      "update_date": "09/01"
-    },
-    "앤하우스": {
-      "amount": "48,930원",
-      "update_date": "09/01"
-    },
-    "매스프레소(콴다)": {
-      "amount": "48,050원",
-      "update_date": "09/01"
-    },
-    "디싸이더스/애드프로젝트": {
-      "amount": "11,000원",
-      "update_date": "09/01"
+      "amount": "184,170원",
+      "update_date": "10/14",
+      "image_path": "bill_images/구쁘_20251014_통신비.pdf"
     },
     "W컨셉": {
-      "amount": "862,120원",
-      "update_date": "09/01"
+      "amount": "737,100원",
+      "update_date": "10/14",
+      "image_path": "bill_images/W컨셉_20251014_통신비.pdf"
+    },
+    "디싸이더스/애드프로젝트": {
+      "amount": "12,830원",
+      "update_date": "10/14",
+      "image_path": "bill_images/디싸이더스_20251014_통신비.pdf"
+    },
+    "매스프레소(콴다)": {
+      "amount": "39,100원",
+      "update_date": "10/14",
+      "image_path": "bill_images/매스프레소(콴다)_20251014_통신비.pdf"
     }
   },
   "processed_files": {
-    "매스프레소(콴다)": {
+    "구쁘": {
       "processed_files": [
-        "2508_매스프레소(콴다)_청구내역서.xlsx"
+        "2509_구쁘_상담솔루션 청구내역서.xlsx"
       ],
-      "timestamp": "2025-09-15T13:47:55.287070"
+      "timestamp": "2025-10-14T10:19:44.701567"
+    },
+    "W컨셉": {
+      "processed_files": [
+        "2508_W컨셉_청구내역서.xlsx"
+      ],
+      "timestamp": "2025-10-14T09:56:09.468350"
     },
     "SK일렉링크": {
       "processed_files": [
-        "2508_SK일렉링크_청구내역서.xlsx"
+        "2509_SK일렉링크_청구내역서.xlsx"
       ],
-      "timestamp": "2025-09-15T13:50:03.588304"
-    },
-    "앤하우스": {
-      "processed_files": [
-        "2508_앤하우스 수수료 청구내역서_창업.xlsx",
-        "2508_앤하우스 수수료 청구내역서_TS.xlsx",
-        "2508_앤하우스 수수료 청구내역서_CS.xlsx"
-      ],
-      "timestamp": "2025-09-15T13:55:04.782175"
+      "timestamp": "2025-10-14T09:57:20.414705"
     },
     "코오롱Fnc": {
       "processed_files": [
-        "2508_코오롱FnC_상담솔루션 청구내역서.xlsx",
-        "코오롱_청구내역서_20250902_125450_202508.xlsx",
-        "OpenAI_정확매칭결과_20250902_125450_202508.csv"
+        "2509_코오롱FnC_상담솔루션 청구내역서.xlsx",
+        "코오롱_청구내역서_20251014_095851_202509.xlsx",
+        "OpenAI_정확매칭결과_20251014_095851_202509.csv"
       ],
-      "timestamp": "2025-09-02T12:54:54.497229"
-    },
-    "구쁘": {
-      "processed_files": [
-        "2508_구쁘_상담솔루션 청구내역서.xlsx"
-      ],
-      "timestamp": "2025-09-16T09:33:49.651758"
+      "timestamp": "2025-10-14T09:58:55.851298"
     }
   }
 }

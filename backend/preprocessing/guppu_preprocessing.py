@@ -2,6 +2,7 @@ import os
 import shutil
 import pandas as pd
 import calendar
+import re
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
@@ -247,17 +248,28 @@ class GuppuPreprocessor:
         try:
             workbook = load_workbook(template_path)
             
-            # 1. 통신서비스 이용료 시트 업데이트
+            # 수집 날짜로부터 년월 정보 생성
+            collection_date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
+            year_month = f"{collection_date_obj.year}년 {collection_date_obj.month:02d}월"
+            
+            # 1. 시트명 변경 (예: "2025년 08월" → 수집한 달로 변경)
+            for sheet in workbook.worksheets:
+                if re.match(r'\d{4}년 \d{1,2}월', sheet.title):
+                    old_title = sheet.title
+                    sheet.title = year_month
+                    print(f"시트명 변경: {old_title} → {year_month}")
+                    break
+            
+            # 2. 통신서비스 이용료 시트 업데이트
             if '통신서비스 이용료' in workbook.sheetnames:
                 main_sheet = workbook['통신서비스 이용료']
                 
                 # D2 셀에 기준월 입력 (YYYY-MM 형식)
-                collection_date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
-                year_month = collection_date_obj.strftime('%Y-%m')
-                main_sheet.cell(row=2, column=4).value = year_month
-                print(f"통신서비스 이용료 시트 D2 셀 업데이트: {year_month}")
+                year_month_format = collection_date_obj.strftime('%Y-%m')
+                main_sheet.cell(row=2, column=4).value = year_month_format
+                print(f"통신서비스 이용료 시트 D2 셀 업데이트: {year_month_format}")
             
-            # 2. 세부내역 시트 업데이트
+            # 3. 세부내역 시트 업데이트
             if '세부내역' in workbook.sheetnames:
                 detail_sheet = workbook['세부내역']
                 
@@ -326,6 +338,31 @@ class GuppuPreprocessor:
                             detail_sheet.cell(row=38, column=col).value = 0  # 아웃바운드
                         print(f"세부내역 시트 AI37-38, AJ37-38, AK37-38 셀 업데이트 (29-31일): 0")
             
+            # 4. 대외공문 시트 업데이트 (SK일렉링크와 동일한 로직)
+            if '대외공문' in workbook.sheetnames:
+                doc_sheet = workbook['대외공문']
+                
+                # B13 셀 업데이트: "제       목 : 2025년 07월 상담솔루션 서비스 수수료 정산 요청"
+                b13_cell = doc_sheet.cell(row=13, column=2)
+                if b13_cell.value and isinstance(b13_cell.value, str):
+                    old_text = b13_cell.value
+                    new_text = re.sub(r'\d{4}년 \d{1,2}월', year_month, old_text)
+                    b13_cell.value = new_text
+                    print(f"대외공문 B13 셀 업데이트: {old_text} → {new_text}")
+                
+                # B16 셀 업데이트 (B,C,D,E,F,G 16행 병합)
+                b16_cell = doc_sheet.cell(row=16, column=2)
+                if b16_cell.value and isinstance(b16_cell.value, str):
+                    old_text = b16_cell.value
+                    new_text = re.sub(r'2025년\d{1,2}월', year_month, old_text)
+                    if new_text == old_text:
+                        new_text = re.sub(r'\d{4}년\d{1,2}월', year_month, old_text)
+                    b16_cell.value = new_text
+                    print(f"대외공문 B16 셀 업데이트: {old_text} → {new_text}")
+                
+                # 하단 테이블 수식 업데이트 (B24, D24, D25)
+                self.update_formula_references(doc_sheet, year_month)
+            
             # 파일 저장 (YYMM 형식으로)
             collection_date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
             date_prefix = f"{str(collection_date_obj.year)[2:]}{collection_date_obj.month:02d}"
@@ -340,6 +377,28 @@ class GuppuPreprocessor:
         except Exception as e:
             print(f"템플릿 업데이트 실패: {e}")
             return None
+    
+    def update_formula_references(self, doc_sheet, year_month):
+        """대외공문 시트의 수식에서 시트명 참조 업데이트"""
+        try:
+            # 수식이 있을 수 있는 셀들 확인 (24행, 25행 등)
+            cells_to_check = [
+                (24, 2), (24, 3), (24, 4),  # B24, C24, D24
+                (25, 2), (25, 3), (25, 4),  # B25, C25, D25
+            ]
+            
+            for row, col in cells_to_check:
+                cell = doc_sheet.cell(row=row, column=col)
+                if cell.value and isinstance(cell.value, str) and cell.value.startswith('='):
+                    old_formula = cell.value
+                    # 수식에서 시트명 참조 패턴 찾아서 교체
+                    new_formula = re.sub(r"'(\d{4}년 \d{1,2}월)'!", f"'{year_month}'!", old_formula)
+                    if new_formula != old_formula:
+                        cell.value = new_formula
+                        print(f"대외공문 {chr(64+col)}{row} 셀 수식 업데이트: {old_formula} → {new_formula}")
+                        
+        except Exception as e:
+            print(f"수식 참조 업데이트 오류: {e}")
     
     def process_guppu_data(self, collection_date):
         """구쁘 데이터 전처리 메인 함수"""

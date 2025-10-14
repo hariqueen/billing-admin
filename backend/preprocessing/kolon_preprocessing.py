@@ -337,7 +337,39 @@ class KolonPreprocessor:
         except Exception as e:
             print(f"요약 데이터 생성 실패: {e}")
             return None
-
+    
+    def filter_kolon_columns(self, kolon_df):
+        """코오롱 해외결제 시트용 6개 컬럼 필터링"""
+        try:
+            # 필요한 6개 컬럼만 선택
+            required_columns = [
+                '매출일자', 
+                '승인시각', 
+                '해외접수달러금액', 
+                '기준환율', 
+                '해외사용수수료', 
+                '원화환산금액'
+            ]
+            
+            # 존재하는 컬럼만 선택 (누락된 컬럼이 있을 경우 대비)
+            available_columns = [col for col in required_columns if col in kolon_df.columns]
+            
+            if len(available_columns) != len(required_columns):
+                missing_columns = set(required_columns) - set(available_columns)
+                print(f"⚠️ 누락된 컬럼: {missing_columns}")
+                print(f"📋 사용 가능한 컬럼: {available_columns}")
+            
+            filtered_df = kolon_df[available_columns].copy()
+            print(f"코오롱 해외결제 시트 컬럼 필터링 완료: {len(available_columns)}개 컬럼")
+            
+            return filtered_df
+            
+        except Exception as e:
+            print(f"컬럼 필터링 실패: {e}")
+            print(f"원본 데이터 컬럼: {list(kolon_df.columns)}")
+            # 실패 시 원본 데이터 반환
+            return kolon_df
+    
     def save_kolon_excel(self, kolon_df, output_path):
         """코오롱 전용 Excel 파일 저장"""
         try:
@@ -386,8 +418,9 @@ class KolonPreprocessor:
                                 green_fill = PatternFill(start_color='92D050', end_color='92D050', fill_type='solid')
                                 cell.fill = green_fill
                 
-                # 2. 코오롱 해외결제 시트
-                kolon_df.to_excel(writer, sheet_name="코오롱 해외결제", index=False)
+                # 2. 코오롱 해외결제 시트 (특정 6개 컬럼만 출력)
+                kolon_filtered_df = self.filter_kolon_columns(kolon_df)
+                kolon_filtered_df.to_excel(writer, sheet_name="코오롱 해외결제", index=False)
                 
             print(f"Excel 파일 저장 완료: {output_path}")
             return True

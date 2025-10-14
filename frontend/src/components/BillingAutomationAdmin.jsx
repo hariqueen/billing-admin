@@ -67,14 +67,16 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       setCompanies(prev => prev.map(company => ({
         ...company,
         billAmount: data[company.name]?.amount,
-        billUpdateDate: data[company.name]?.update_date
+        billUpdateDate: data[company.name]?.update_date,
+        billImagePath: data[company.name]?.image_path,
+        billPdfFile: data[company.name]?.pdf_file
       })));
     } catch (error) {
       console.error('통신비 정보 가져오기 실패:', error);
     }
   };
 
-  // 고지서 업로드 처리
+  // 통신비 업로드 처리
   const handleBillUpload = async (event) => {
     const files = event.target.files;
     if (files.length === 0) return;
@@ -95,15 +97,15 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       const result = await response.json();
       
       if (response.ok) {
-        console.log('고지서 처리 완료:', result);
+        console.log('통신비 처리 완료:', result);
         // 통신비 정보 새로고침
         await fetchBillAmounts();
       } else {
-        alert(`고지서 처리 실패: ${result.error}`);
+        alert(`통신비 처리 실패: ${result.error}`);
       }
     } catch (error) {
-      console.error('고지서 업로드 실패:', error);
-      alert('고지서 업로드 중 오류가 발생했습니다.');
+      console.error('통신비 업로드 실패:', error);
+      alert('통신비 업로드 중 오류가 발생했습니다.');
     } finally {
       setIsUploading(false);
     }
@@ -111,6 +113,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     // 파일 선택 초기화
     event.target.value = '';
   };
+
 
   // 저장된 청구서 결과 로드
   const loadProcessedFiles = async () => {
@@ -270,6 +273,9 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         const status = await response.json();
 
         if (status.status === 'completed') {
+          console.log(`수집 완료 - ${companyName}:`, status);
+          console.log(`수집된 파일 목록:`, status.files);
+          
           setCompanies(prev => prev.map(company => 
             company.name === companyName 
               ? { ...company, collecting: false, collectedFiles: status.files }
@@ -278,7 +284,14 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           
           // 앤하우스, 디싸이더스/애드프로젝트, 매스프레소(콴다), 구쁘인 경우 수집된 파일들을 자동으로 업로드
           if ((companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)' || companyName === '구쁘') && status.files && status.files.length > 0) {
+            console.log(`${companyName} 자동 업로드 조건 만족 - 파일 수: ${status.files.length}`);
             autoUploadCollectedFiles(companyName, status.files);
+          } else {
+            console.log(`${companyName} 자동 업로드 조건 불만족:`, {
+              isTargetCompany: (companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)' || companyName === '구쁘'),
+              hasFiles: status.files && status.files.length > 0,
+              filesLength: status.files ? status.files.length : 0
+            });
           }
         } else if (status.status === 'failed') {
           console.error('작업 실패:', status.error);
@@ -741,13 +754,13 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
             {/* 고지서 헤더 */}
             <div className="col-span-3 flex items-center justify-center gap-3">
               <span>고지서</span>
-              {/* 고지서 일괄 업로드 */}
+              {/* 고지서 일괄 업로드 (HTML/PDF 통합) */}
               <div className="relative">
                 <label className={`cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <input
                     type="file"
                     className="hidden"
-                    accept=".html"
+                    accept=".html,.pdf"
                     multiple
                     onChange={handleBillUpload}
                     disabled={isUploading}
@@ -815,21 +828,21 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                   </button>
                 </div>
 
-                            {/* 고지서 영역 */}
-            <div className="col-span-3 flex flex-col justify-center items-center gap-1">
-              {company.billAmount ? (
-                <>
-                  <span className="text-green-600 font-medium">
-                    {company.billAmount}
-                  </span>
-                  <span className="text-gray-400 text-xs">
-                    {company.billUpdateDate} 업데이트
-                  </span>
-                </>
-              ) : (
-                <span className="text-gray-400 text-sm">-</span>
-              )}
-            </div>
+                {/* 고지서 영역 */}
+                <div className="col-span-3 flex flex-col justify-center items-center gap-1">
+                  {company.billAmount ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-green-600 font-medium">
+                        {company.billAmount}
+                      </span>
+                      <span className="text-gray-400 text-xs">
+                        {company.billUpdateDate} 업데이트
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-400 text-sm">-</span>
+                  )}
+                </div>
 
                 {/* 구분선 */}
                 <div className="col-span-1 flex justify-center items-center">
@@ -909,20 +922,49 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                 </div>
 
                 {/* 청구서 영역 */}
-                <div className="col-span-2 flex flex-col items-center gap-1">
+                <div className="col-span-2 flex flex-col items-center gap-2">
+                  {/* 청구내역서 파일들 */}
                   {company.processedFiles && company.processedFiles.length > 0 ? (
-                    company.processedFiles.map((filename, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleDownload(filename)}
-                        className="text-green-600 hover:text-green-800 text-sm underline text-center max-w-full truncate"
-                        title={filename}
-                      >
-                        {filename}
-                      </button>
-                    ))
+                    <div className="flex flex-col items-center gap-1">
+                      {company.processedFiles.map((filename, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleDownload(filename)}
+                          className="text-green-600 hover:text-green-800 text-sm underline text-center max-w-full truncate"
+                          title={filename}
+                        >
+                          {filename}
+                        </button>
+                      ))}
+                    </div>
                   ) : (
                     <span className="text-gray-400 text-sm">-</span>
+                  )}
+                  
+                  {/* 통신비 PDF (HTML에서 생성) */}
+                  {company.billImagePath && (
+                    <div className="flex flex-col items-center gap-1 mt-2 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={() => window.open(`${API_URL}/api/bill-image/${company.billImagePath.split('/').pop()}`, '_blank')}
+                        className="text-blue-600 hover:text-blue-800 text-sm underline text-center max-w-full truncate"
+                        title={company.billImagePath.split('/').pop()}
+                      >
+                        {company.billImagePath.split('/').pop()}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* 고지서 PDF (직접 업로드) */}
+                  {company.billPdfFile && (
+                    <div className="flex flex-col items-center gap-1 mt-2 pt-2 border-t border-gray-200">
+                      <button
+                        onClick={() => window.open(`${API_URL}/api/bill-pdf/${company.billPdfFile}`, '_blank')}
+                        className="text-blue-600 hover:text-blue-800 text-sm underline text-center max-w-full truncate"
+                        title={company.billPdfFile}
+                      >
+                        {company.billPdfFile}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

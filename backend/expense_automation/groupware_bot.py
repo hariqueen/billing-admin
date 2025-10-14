@@ -346,12 +346,6 @@ class GroupwareAutomation:
                 
                 if cell_amount == clean_target:
                     print(f"      금액 매칭! 행 {i+1}")
-                    
-                    # 이미 처리된 행인지 확인
-                    if self._is_row_already_processed(i):
-                        print(f"      행 {i+1}은 이미 처리됨 - 건너뛰기")
-                        continue
-                    
                     print(f"      행 {i+1}을 처리합니다")
                     
                     # 체크박스 클릭

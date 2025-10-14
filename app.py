@@ -519,6 +519,36 @@ def download_file(filename):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/bill-image/<filename>', methods=['GET'])
+def get_bill_image(filename):
+    """통신비 PDF 파일 서빙"""
+    try:
+        bill_images_dir = "bill_images"
+        file_path = os.path.join(bill_images_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"파일을 찾을 수 없습니다: {filename}"}), 404
+        
+        return send_file(file_path, mimetype='application/pdf')
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/bill-pdf/<filename>', methods=['GET'])
+def get_bill_pdf(filename):
+    """고지서 PDF 파일 서빙"""
+    try:
+        pdf_files_dir = "bill_pdfs"
+        file_path = os.path.join(pdf_files_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"파일을 찾을 수 없습니다: {filename}"}), 404
+        
+        return send_file(file_path, mimetype='application/pdf')
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 @app.route('/api/process-file', methods=['POST'])
@@ -722,19 +752,19 @@ def process_file():
 
 @app.route('/api/upload-bills', methods=['POST'])
 def upload_bills():
-    """HTML 고지서 일괄 업로드 및 처리"""
+    """고지서 일괄 업로드 및 처리 (HTML/PDF 통합)"""
     try:
         if 'files[]' not in request.files:
             return jsonify({"error": "파일이 없습니다"}), 400
         
         files = request.files.getlist('files[]')
-        html_files = [f for f in files if f.filename.endswith('.html')]
+        valid_files = [f for f in files if f.filename.endswith(('.html', '.pdf'))]
         
-        if not html_files:
-            return jsonify({"error": "HTML 파일이 없습니다"}), 400
+        if not valid_files:
+            return jsonify({"error": "HTML 또는 PDF 파일이 없습니다"}), 400
         
-        # HTML 파일 처리 및 통신비 정보 추출
-        results = bill_processor.process_html_files(html_files)
+        # HTML과 PDF 파일 통합 처리
+        results = bill_processor.process_mixed_files(valid_files)
         
         if results:
             return jsonify({
@@ -747,6 +777,7 @@ def upload_bills():
     except Exception as e:
         print(f"고지서 업로드 오류: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/bill-amounts', methods=['GET'])
 def get_bill_amounts():
