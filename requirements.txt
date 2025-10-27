@@ -1,0 +1,12 @@
+flask
+flask-cors
+firebase-admin
+boto3
+python-dotenv
+pandas
+openpyxl
+requests
+selenium
+webdriver-manager
+beautifulsoup4
+lxml
