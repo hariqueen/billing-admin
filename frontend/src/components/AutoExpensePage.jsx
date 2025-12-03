@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Upload, FileText, Play, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
-// API URL을 환경에 따라 자동으로 선택
+// API URL을 환경에 따라 자동으로 선택 (BillingAutomationAdmin과 동일)
 const API_URL = window.location.hostname === 'localhost' 
   ? 'http://localhost:5001'
-  : 'http://13.125.245.229:5001';
+  : `http://${window.location.hostname}:5001`;
 
 // 한 달 전 1일부터 말일까지 날짜 계산 (청구서 발행과 동일한 로직)
 const getPreviousMonthRange = () => {
@@ -107,16 +107,28 @@ const AutoExpensePage = ({ onBack, user }) => {
       formData.append('user_id', user.employeeId);
       formData.append('password', user.password);
       
+      console.log('🚀 지출결의서 자동화 요청 시작');
+      console.log('   API URL:', `${API_URL}/api/expense-automation`);
+      console.log('   파일명:', file.name);
+      console.log('   카테고리:', category);
+      console.log('   날짜:', formatDateToYYYYMMDD(dateRange.startDate), '~', formatDateToYYYYMMDD(dateRange.endDate));
+      console.log('   사용자 ID:', user.employeeId);
+      
       const response = await fetch(`${API_URL}/api/expense-automation`, {
         method: 'POST',
         body: formData
       });
       
+      console.log('📥 서버 응답 수신:', response.status, response.statusText);
+      
       if (!response.ok) {
-        throw new Error(`서버 오류: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ 서버 오류 응답:', errorText);
+        throw new Error(`서버 오류: ${response.status} - ${errorText.substring(0, 200)}`);
       }
       
       const result = await response.json();
+      console.log('✅ 서버 응답 데이터:', result);
       
       if (result.success) {
         setResults({
@@ -131,7 +143,8 @@ const AutoExpensePage = ({ onBack, user }) => {
       }
       
     } catch (error) {
-      console.error('자동화 실행 오류:', error);
+      console.error('❌ 자동화 실행 오류:', error);
+      console.error('   오류 상세:', error.stack);
       setResults({
         success: false,
         message: error.message

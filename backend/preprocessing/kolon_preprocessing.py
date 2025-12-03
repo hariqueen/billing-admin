@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from openpyxl.styles import PatternFill, Border, Side
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
 import re
 import shutil
 import firebase_admin
@@ -14,7 +15,7 @@ import calendar
 
 class KolonPreprocessor:
     def __init__(self):
-        self.download_dir = str(Path.home() / "Downloads")
+        self.download_dir = os.path.join(os.getcwd(), "temp_processing")
         os.makedirs(self.download_dir, exist_ok=True)
         self.bucket = None
         self.db = None
@@ -532,7 +533,6 @@ class KolonPreprocessor:
             shutil.copy2(template_path, output_path)
             print(f"템플릿 파일 복사 완료: {output_filename}")
             
-            # 워크북 로드
             workbook = load_workbook(output_path)
             
             # B9 셀에 문서번호 설정 (MMP-{년월} 형식)
@@ -585,6 +585,21 @@ class KolonPreprocessor:
                             b1_cell.value = new_text
                             print(f"{year_month} 시트 B1 셀 텍스트 업데이트: {old_text} → {new_text}")
                     break
+            
+            # 로고 이미지 삽입 (B2 셀)
+            try:
+                logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'logo.png')
+                if os.path.exists(logo_path):
+                    img = Image(logo_path)
+                    if '대외공문' in workbook.sheetnames:
+                        doc_sheet = workbook['대외공문']
+                        doc_sheet.add_image(img, 'B2')
+                        print("대외공문 시트 B2 셀에 로고 이미지 삽입 완료")
+                    elif workbook.worksheets:
+                        workbook.worksheets[0].add_image(img, 'B2')
+                        print(f"{workbook.worksheets[0].title} 시트 B2 셀에 로고 이미지 삽입 완료")
+            except Exception as e:
+                print(f"로고 이미지 삽입 실패: {e}")
             
             # 3. 세부내역 시트 업데이트
             if '세부내역' in workbook.sheetnames:
@@ -644,7 +659,6 @@ class KolonPreprocessor:
         try:
             print("코오롱 데이터 전처리 시작")
             
-            # 1. temp_processing 폴더에서 코오롱 파일 찾기
             temp_dir = "temp_processing"
             if not os.path.exists(temp_dir):
                 print("temp_processing 폴더를 찾을 수 없습니다")
@@ -817,8 +831,7 @@ class KolonPreprocessor:
                     print(f"   2. 코오롱 청구내역서: {report_filename}")
                     print(f"   3. 코오롱FnC 상담솔루션 청구내역서: {os.path.basename(final_invoice_path)}")
                     
-                    # 4. temp_processing 폴더 정리
-                    self.cleanup_temp_folder()
+                    # self.cleanup_temp_folder()
                     
                     return True
                 else:
@@ -828,8 +841,7 @@ class KolonPreprocessor:
                 print("코오롱 계정 매칭 데이터가 없어 코오롱 전용 파일들을 생성하지 않습니다.")
                 print(f"OpenAI 매칭결과만 생성 완료: {openai_filename} (모든 계정)")
                 
-                # temp_processing 폴더 정리
-                self.cleanup_temp_folder()
+                # self.cleanup_temp_folder()
                 return True
             
         except Exception as e:

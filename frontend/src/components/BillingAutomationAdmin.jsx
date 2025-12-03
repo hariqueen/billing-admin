@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Upload, Play, Loader2 } from 'lucide-react';
+import { Download, Upload, Play, Loader2, RotateCcw } from 'lucide-react';
 
 // API URL을 환경에 따라 자동으로 선택
 const API_URL = window.location.hostname === 'localhost' 
@@ -115,21 +115,23 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   };
 
 
-  // 저장된 청구서 결과 로드
+  // 저장된 파일 목록 로드
   const loadProcessedFiles = async () => {
     try {
       const response = await fetch(`${API_URL}/api/get-processed-files`);
       const data = await response.json();
       
-      if (response.ok && data.processed_files) {
+      if (response.ok) {
         // 저장된 결과를 회사별로 적용
         setCompanies(prev => prev.map(company => ({
           ...company,
-          processedFiles: data.processed_files[company.name]?.processed_files || []
+          processedFiles: data.processed_files?.[company.name]?.processed_files || [],
+          uploadedFiles: data.uploaded_files?.[company.name] || [],
+          collectedFiles: data.collected_files?.[company.name] || []
         })));
       }
     } catch (error) {
-      console.error('청구서 결과 로드 실패:', error);
+      console.error('파일 목록 로드 실패:', error);
     }
   };
 
@@ -220,6 +222,43 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     }));
   };
 
+  const handleReset = async () => {
+    if (!window.confirm('모든 데이터를 초기화하시겠습니까?\n(고지서 금액, 업로드된 파일, 청구서 파일이 모두 삭제됩니다)')) {
+      return;
+    }
+
+    try {
+      const resetResponse = await fetch(`${API_URL}/api/reset`, {
+        method: 'POST'
+      });
+      const resetResult = await resetResponse.json();
+      
+      if (!resetResponse.ok) {
+        alert(resetResult.error || '초기화 실패');
+        return;
+      }
+
+      setDateRange(getPreviousMonthRange());
+      setCompanies(prev => prev.map(company => ({
+        ...company,
+        uploadedFiles: [],
+        collectedFiles: [],
+        processedFiles: [],
+        collecting: false,
+        processing: false,
+        billAmount: undefined,
+        billUpdateDate: undefined,
+        billImagePath: undefined,
+        billPdfFile: undefined
+      })));
+
+      alert('초기화가 완료되었습니다.');
+    } catch (error) {
+      console.error('초기화 실패:', error);
+      alert('초기화 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleCollectData = async (companyName) => {
     setCompanies(prev => prev.map(company => 
       company.name === companyName 
@@ -275,22 +314,47 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         if (status.status === 'completed') {
           console.log(`수집 완료 - ${companyName}:`, status);
           console.log(`수집된 파일 목록:`, status.files);
+          console.log(`파일 타입:`, typeof status.files, Array.isArray(status.files));
+          console.log(`파일 개수:`, status.files ? status.files.length : 0);
+          
+          const filesArray = Array.isArray(status.files) ? status.files : (status.files || []);
           
           setCompanies(prev => prev.map(company => 
             company.name === companyName 
-              ? { ...company, collecting: false, collectedFiles: status.files }
+              ? { ...company, collecting: false, collectedFiles: filesArray }
               : company
           ));
           
+          // 수집된 파일 목록 저장
+          if (filesArray && filesArray.length > 0) {
+            console.log(`수집된 파일 목록 저장 시작: ${companyName}`, filesArray);
+            try {
+              const saveResponse = await fetch(`${API_URL}/api/save-collected-files`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  company_name: companyName,
+                  collected_files: filesArray
+                })
+              });
+              const saveResult = await saveResponse.json();
+              console.log(`수집된 파일 목록 저장 결과:`, saveResult);
+            } catch (error) {
+              console.error('수집된 파일 목록 저장 실패:', error);
+            }
+          } else {
+            console.warn(`수집된 파일이 없어 저장하지 않음: ${companyName}`, filesArray);
+          }
+          
           // 앤하우스, 디싸이더스/애드프로젝트, 매스프레소(콴다), 구쁘인 경우 수집된 파일들을 자동으로 업로드
-          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)' || companyName === '구쁘') && status.files && status.files.length > 0) {
-            console.log(`${companyName} 자동 업로드 조건 만족 - 파일 수: ${status.files.length}`);
-            autoUploadCollectedFiles(companyName, status.files);
+          if ((companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)' || companyName === '구쁘') && filesArray && filesArray.length > 0) {
+            console.log(`${companyName} 자동 업로드 조건 만족 - 파일 수: ${filesArray.length}`);
+            autoUploadCollectedFiles(companyName, filesArray);
           } else {
             console.log(`${companyName} 자동 업로드 조건 불만족:`, {
               isTargetCompany: (companyName === '앤하우스' || companyName === '디싸이더스/애드프로젝트' || companyName === '매스프레소(콴다)' || companyName === '구쁘'),
-              hasFiles: status.files && status.files.length > 0,
-              filesLength: status.files ? status.files.length : 0
+              hasFiles: filesArray && filesArray.length > 0,
+              filesLength: filesArray ? filesArray.length : 0
             });
           }
         } else if (status.status === 'failed') {
@@ -370,11 +434,28 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           if (response.ok) {
             console.log(`자동 업로드 완료: ${filename} -> ${result.filename}`);
             // 파일 업로드 후 상태 업데이트
-            setCompanies(prev => prev.map(comp => 
-              comp.name === companyName 
-                ? { ...comp, uploadedFiles: [...(comp.uploadedFiles || []), result.filename] }
-                : comp
-            ));
+            setCompanies(prev => {
+              const updatedCompanies = prev.map(comp => 
+                comp.name === companyName 
+                  ? { ...comp, uploadedFiles: [...(comp.uploadedFiles || []), result.filename] }
+                  : comp
+              );
+              
+              // 업로드된 파일 목록 저장
+              const updatedCompany = updatedCompanies.find(c => c.name === companyName);
+              if (updatedCompany) {
+                fetch(`${API_URL}/api/save-uploaded-files`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    company_name: companyName,
+                    uploaded_files: updatedCompany.uploadedFiles
+                  })
+                }).catch(error => console.error('업로드된 파일 목록 저장 실패:', error));
+              }
+              
+              return updatedCompanies;
+            });
           } else {
             console.error(`자동 업로드 실패 (${filename}):`, result.error);
           }
@@ -384,6 +465,23 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       }
       
       console.log('모든 파일 업로드 완료');
+      
+      // 모든 파일 업로드 완료 후 저장
+      const finalCompany = companies.find(c => c.name === companyName);
+      if (finalCompany) {
+        try {
+          await fetch(`${API_URL}/api/save-uploaded-files`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              company_name: companyName,
+              uploaded_files: finalCompany.uploadedFiles || []
+            })
+          });
+        } catch (error) {
+          console.error('업로드된 파일 목록 저장 실패:', error);
+        }
+      }
       
     } catch (error) {
       console.error('자동 업로드 오류:', error);
@@ -556,6 +654,20 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           : comp
       ));
       
+      // 업로드된 파일 목록 저장
+      try {
+        await fetch(`${API_URL}/api/save-uploaded-files`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            company_name: companyName,
+            uploaded_files: uploadedFiles
+          })
+        });
+      } catch (error) {
+        console.error('업로드된 파일 목록 저장 실패:', error);
+      }
+      
     } catch (error) {
       console.error('다중 파일 업로드 실패:', error);
       alert(`파일 업로드 실패: ${error.message}`);
@@ -650,6 +762,12 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     }
   };
 
+  // 파일명을 일정 길이로 자르고 "..." 추가
+  const truncateFilename = (filename, maxLength = 30) => {
+    if (!filename || filename.length <= maxLength) return filename;
+    return filename.substring(0, maxLength) + '...';
+  };
+
   const handleDownload = async (filename) => {
     try {
       const response = await fetch(`${API_URL}/api/download/${filename}`, {
@@ -739,7 +857,14 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                 />
               </div>
             </div>
-
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors text-sm font-medium"
+              title="모든 데이터 초기화 (고지서, 청구서, 업로드 파일)"
+            >
+              <RotateCcw className="w-4 h-4" />
+              초기화
+            </button>
           </div>
         </div>
 
@@ -801,8 +926,8 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
         {/* 고객사 목록 */}
         <div className="space-y-3">
           {companies.map((company) => (
-            <div key={company.name} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="grid grid-cols-12 gap-6 items-center">
+            <div key={company.name} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 overflow-hidden">
+              <div className="grid grid-cols-12 gap-6 items-center" style={{ width: '100%', overflow: 'hidden' }}>
                 {/* ISC/PJ명 영역 */}
                 <div className="col-span-2 flex justify-center">
                   <button
@@ -869,7 +994,10 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                       
                       {/* 업로드된 파일 개수 표시 */}
                       {company.uploadedFiles.filter(file => file).length > 0 && (
-                        <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        <div 
+                          className="absolute -top-1 -right-1 bg-green-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg"
+                          style={{ zIndex: 50 }}
+                        >
                           {company.uploadedFiles.filter(file => file).length}
                         </div>
                       )}
@@ -922,18 +1050,18 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                 </div>
 
                 {/* 청구서 영역 */}
-                <div className="col-span-2 flex flex-col items-center gap-2">
+                <div className="col-span-2" style={{ minWidth: 0, width: '100%', maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
                   {/* 청구내역서 파일들 */}
                   {company.processedFiles && company.processedFiles.length > 0 ? (
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="space-y-1">
                       {company.processedFiles.map((filename, index) => (
                         <button
                           key={index}
                           onClick={() => handleDownload(filename)}
-                          className="text-green-600 hover:text-green-800 text-sm underline text-center max-w-full truncate"
+                          className="text-green-600 hover:text-green-800 text-sm underline text-left"
                           title={filename}
                         >
-                          {filename}
+                          {truncateFilename(filename)}
                         </button>
                       ))}
                     </div>
@@ -943,26 +1071,26 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                   
                   {/* 통신비 PDF (HTML에서 생성) */}
                   {company.billImagePath && (
-                    <div className="flex flex-col items-center gap-1 mt-2 pt-2 border-t border-gray-200">
+                    <div className="mt-2 pt-2 border-t border-gray-200">
                       <button
                         onClick={() => window.open(`${API_URL}/api/bill-image/${company.billImagePath.split('/').pop()}`, '_blank')}
-                        className="text-blue-600 hover:text-blue-800 text-sm underline text-center max-w-full truncate"
+                        className="text-blue-600 hover:text-blue-800 text-sm underline text-left"
                         title={company.billImagePath.split('/').pop()}
                       >
-                        {company.billImagePath.split('/').pop()}
+                        {truncateFilename(company.billImagePath.split('/').pop())}
                       </button>
                     </div>
                   )}
                   
                   {/* 고지서 PDF (직접 업로드) */}
                   {company.billPdfFile && (
-                    <div className="flex flex-col items-center gap-1 mt-2 pt-2 border-t border-gray-200">
+                    <div className="mt-2 pt-2 border-t border-gray-200">
                       <button
                         onClick={() => window.open(`${API_URL}/api/bill-pdf/${company.billPdfFile}`, '_blank')}
-                        className="text-blue-600 hover:text-blue-800 text-sm underline text-center max-w-full truncate"
+                        className="text-blue-600 hover:text-blue-800 text-sm underline text-left"
                         title={company.billPdfFile}
                       >
-                        {company.billPdfFile}
+                        {truncateFilename(company.billPdfFile)}
                       </button>
                     </div>
                   )}

@@ -5,13 +5,15 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
 
 class DecidersPreprocessor:
     def __init__(self):
-        self.download_dir = str(Path.home() / "Downloads")
+        self.download_dir = os.path.join(os.getcwd(), "temp_processing")
+        os.makedirs(self.download_dir, exist_ok=True)
         self.setup_firebase()
         
         # 발신번호별 매핑
@@ -274,15 +276,13 @@ class DecidersPreprocessor:
             else:
                 output_filename = f"{date_prefix}_애드프로젝트_상담솔루션 청구내역서.xlsx"
             
-            # 다운로드 폴더에 저장
-            download_dir = str(Path.home() / "Downloads")
+            download_dir = "temp_processing"
             os.makedirs(download_dir, exist_ok=True)
             output_path = os.path.join(download_dir, output_filename)
             
             # 템플릿 복사
             shutil.copy2(template_path, output_path)
             
-            # 워크북 로드
             workbook = load_workbook(output_path)
             
             # 수집 날짜로부터 년월 정보 생성
@@ -319,6 +319,21 @@ class DecidersPreprocessor:
                     print(f"{invoice_type} 카카오 채팅 카운트 입력 - D14: {chat_count}건")
                 
                 print(f"{invoice_type} 카운트 입력 - SMS:{counts['SMS']}, LMS:{counts['LMS']}, MMS:{counts['MMS']}, TALK:{counts['TALK']}")
+            
+            # 로고 이미지 삽입 (B2 셀)
+            try:
+                logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'logo.png')
+                if os.path.exists(logo_path):
+                    img = Image(logo_path)
+                    if '대외공문' in workbook.sheetnames:
+                        doc_sheet = workbook['대외공문']
+                        doc_sheet.add_image(img, 'B2')
+                        print("대외공문 시트 B2 셀에 로고 이미지 삽입 완료")
+                    elif workbook.worksheets:
+                        workbook.worksheets[0].add_image(img, 'B2')
+                        print(f"{workbook.worksheets[0].title} 시트 B2 셀에 로고 이미지 삽입 완료")
+            except Exception as e:
+                print(f"로고 이미지 삽입 실패: {e}")
             
             # 파일 저장
             workbook.save(output_path)
@@ -402,8 +417,7 @@ class DecidersPreprocessor:
                 if output_file:
                     processed_files.append(output_file)
             
-            # 6. 정리
-            self.cleanup_temp_folder()
+            # self.cleanup_temp_folder()
             
             print(f"전처리 완료: {len(processed_files)}개 파일 생성")
             return processed_files

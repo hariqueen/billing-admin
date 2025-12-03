@@ -1,0 +1,51 @@
+services:
+  # 백엔드 서비스
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: billing-admin-backend
+    ports:
+      - "5001:5001"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_APP=app.py
+      # AWS 자격 증명 (로컬 개발 시 선택사항 - .env 파일에서 설정 가능)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-northeast-2}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY:-}
+    volumes:
+      # 임시 파일 저장소
+      - temp_data:/app/temp_processing
+    working_dir: /app
+    restart: unless-stopped
+    networks:
+      - billing-network
+
+  # 프론트엔드 서비스 (React 개발 서버)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: billing-admin-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5001
+      - CHOKIDAR_USEPOLLING=true
+      - HOST=0.0.0.0
+    working_dir: /app
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - billing-network
+
+volumes:
+  temp_data:
+
+networks:
+  billing-network:
+    driver: bridge
+

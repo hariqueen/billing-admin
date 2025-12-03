@@ -11,7 +11,8 @@ const LoginForm = ({ onLogin }) => {
     '2025070184': { name: '김정웅', position: '이사' },
     '2025040003': { name: '허수빈', position: '과장' },
     '2023010297': { name: '장정근', position: '부장' },
-    '2025070803': { name: '강주희', position: '부장' }
+    '2025070803': { name: '강주희', position: '부장' },
+    '2025110391': { name: '이우진', position: '차장' }
   };
 
   const handleSubmit = (e) => {

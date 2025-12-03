@@ -10,7 +10,13 @@ class DatabaseManager:
     """Firebase 데이터베이스 관리"""
     
     def __init__(self):
-        self.db = self._initialize_firebase()
+        self.db = None
+        try:
+            self.db = self._initialize_firebase()
+        except Exception as e:
+            print(f"⚠️ Firebase 초기화 실패 (로컬 개발 환경일 수 있음): {e}")
+            print("   Firebase 기능은 사용할 수 없지만, 다른 기능은 정상 작동합니다.")
+            self.db = None
     
     def _initialize_firebase(self):
         """Firebase 초기화"""
@@ -24,6 +30,10 @@ class DatabaseManager:
     
     def get_accounts_by_type(self, account_type):
         """타입별 계정 조회"""
+        if self.db is None:
+            print("⚠️ Firebase가 초기화되지 않아 빈 리스트를 반환합니다.")
+            return []
+            
         from backend.data_collection.config import AccountConfig
         
         if account_type == "sms":
@@ -52,6 +62,10 @@ class DatabaseManager:
     
     def get_all_accounts(self):
         """모든 계정 정보 조회"""
+        if self.db is None:
+            print("⚠️ Firebase가 초기화되지 않아 빈 리스트를 반환합니다.")
+            return []
+            
         try:
             print("🔍 Firebase에서 모든 계정 조회 시작...")
             docs = self.db.collection("accounts").get()
@@ -74,6 +88,8 @@ class DatabaseManager:
     
     def add_account_legacy(self, company_name, account_type, url, username, password, notes="", status="active"):
         """새 계정 추가 (레거시 메서드)"""
+        if self.db is None:
+            raise Exception("Firebase가 초기화되지 않았습니다.")
         try:
             account_data = {
                 'company_name': company_name,
@@ -95,6 +111,8 @@ class DatabaseManager:
     
     def update_account_legacy(self, account_id, company_name, account_type, url, username, password, notes="", status="active"):
         """계정 정보 수정 (레거시 메서드)"""
+        if self.db is None:
+            raise Exception("Firebase가 초기화되지 않았습니다.")
         try:
             account_data = {
                 'company_name': company_name,
@@ -115,6 +133,8 @@ class DatabaseManager:
     
     def delete_account(self, account_id):
         """계정 삭제"""
+        if self.db is None:
+            raise Exception("Firebase가 초기화되지 않았습니다.")
         try:
             self.db.collection("accounts").document(account_id).delete()
             print(f"✅ 계정 삭제 완료: {account_id}")
@@ -124,6 +144,8 @@ class DatabaseManager:
     
     def get_account_by_id(self, account_id):
         """ID로 특정 계정 조회"""
+        if self.db is None:
+            return None
         try:
             doc = self.db.collection("accounts").document(account_id).get()
             if doc.exists:
@@ -138,6 +160,8 @@ class DatabaseManager:
     
     def add_account(self, account_data):
         """새 계정 추가 (JSON 데이터로)"""
+        if self.db is None:
+            raise Exception("Firebase가 초기화되지 않았습니다.")
         try:
             company_name = account_data.get('company_name')
             account_type = account_data.get('account_type')
@@ -159,6 +183,8 @@ class DatabaseManager:
     
     def update_account(self, account_id, account_data):
         """계정 정보 수정 (JSON 데이터로)"""
+        if self.db is None:
+            raise Exception("Firebase가 초기화되지 않았습니다.")
         try:
             account_data['updated_at'] = firestore.SERVER_TIMESTAMP
             self.db.collection("accounts").document(account_id).update(account_data)

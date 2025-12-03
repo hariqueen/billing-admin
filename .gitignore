@@ -13,6 +13,7 @@
 *-firebase-adminsdk-*.json
 *-rtdb-export.json
 firebase-credentials.json
+admin_storage.json
 
 # Python
 __pycache__/

@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from io import StringIO
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
@@ -13,7 +14,8 @@ import calendar
 
 class AnhousPreprocessor:
     def __init__(self):
-        self.download_dir = str(Path.home() / "Downloads")
+        self.download_dir = os.path.join(os.getcwd(), "temp_processing")
+        os.makedirs(self.download_dir, exist_ok=True)
         self.setup_firebase()
     
     def setup_firebase(self):
@@ -106,7 +108,6 @@ class AnhousPreprocessor:
         """업로드된 파일들만 CSV로 변환"""
         csv_files = []
         
-        # temp_processing 폴더에서 앤하우스 파일 검색
         temp_dir = "temp_processing"
         if os.path.exists(temp_dir):
             anhous_files = []
@@ -190,6 +191,7 @@ class AnhousPreprocessor:
         try:
             import shutil
             from openpyxl import load_workbook
+            from openpyxl.drawing.image import Image
             
             print(f"{template_team} 데이터 처리 중...")
             
@@ -217,7 +219,6 @@ class AnhousPreprocessor:
             # 원본 템플릿 복사
             shutil.copy2(template_path, output_path)
             
-            # 워크북 로드
             workbook = load_workbook(output_path)
             
             # 통화료 시트 가져오기
@@ -380,6 +381,21 @@ class AnhousPreprocessor:
                 for row in row_range:
                     sheet.cell(row=row, column=ak_col).value = ak_value
                 print(f"세부내역 시트 AK{min(row_range)}-{max(row_range)} 셀 업데이트 ({team_name}): {ak_value} ({'31일 월' if ak_value == 1 else '30일 이하 월'})")
+            
+            # 로고 이미지 삽입 (B2 셀)
+            try:
+                logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'logo.png')
+                if os.path.exists(logo_path):
+                    img = Image(logo_path)
+                    if '대외공문' in workbook.sheetnames:
+                        doc_sheet = workbook['대외공문']
+                        doc_sheet.add_image(img, 'B2')
+                        print("대외공문 시트 B2 셀에 로고 이미지 삽입 완료")
+                    elif workbook.worksheets:
+                        workbook.worksheets[0].add_image(img, 'B2')
+                        print(f"{workbook.worksheets[0].title} 시트 B2 셀에 로고 이미지 삽입 완료")
+            except Exception as e:
+                print(f"로고 이미지 삽입 실패: {e}")
             
             # 파일 저장
             workbook.save(output_path)
@@ -643,8 +659,7 @@ class AnhousPreprocessor:
             
             print(f" 전처리 완료: {len(updated_files)}개 파일 업데이트")
             
-            # temp_processing 폴더 정리
-            self.cleanup_temp_folder()
+            # self.cleanup_temp_folder()
             
             return True
             

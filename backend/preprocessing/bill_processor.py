@@ -395,8 +395,8 @@ class BillProcessor:
             success = preprocessor.process_wconcept_data(collection_date, license_count)
             
             if success:
-                # 성공 시 다운로드 폴더에서 생성된 파일 찾기 (W컨셉은 n-1월 파일명)
-                download_dir = str(Path.home() / "Downloads")
+                download_dir = os.path.join(os.getcwd(), "temp_processing")
+                os.makedirs(download_dir, exist_ok=True)
                 date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
                 
                 # W컨셉은 n-1월로 파일명 생성
@@ -430,8 +430,8 @@ class BillProcessor:
             success = preprocessor.process_mathpresso_data(collection_date)
             
             if success:
-                # 성공 시 다운로드 폴더에서 생성된 파일 찾기
-                download_dir = str(Path.home() / "Downloads")
+                download_dir = os.path.join(os.getcwd(), "temp_processing")
+                os.makedirs(download_dir, exist_ok=True)
                 date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
                 date_prefix = f"{str(date_obj.year)[2:]}{date_obj.month:02d}"
                 expected_filename = f"{date_prefix}_매스프레소(콴다)_청구내역서.xlsx"
@@ -456,8 +456,8 @@ class BillProcessor:
             success = preprocessor.process_guppu_data(collection_date)
             
             if success:
-                # 성공 시 다운로드 폴더에서 생성된 파일 찾기
-                download_dir = str(Path.home() / "Downloads")
+                download_dir = os.path.join(os.getcwd(), "temp_processing")
+                os.makedirs(download_dir, exist_ok=True)
                 date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
                 date_prefix = f"{str(date_obj.year)[2:]}{date_obj.month:02d}"
                 expected_filename = f"{date_prefix}_구쁘_상담솔루션 청구내역서.xlsx"

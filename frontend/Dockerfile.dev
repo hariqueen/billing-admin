@@ -1,0 +1,20 @@
+# 프론트엔드 개발용 Dockerfile (React 개발 서버)
+FROM node:18-alpine
+
+WORKDIR /app
+
+# package.json 복사
+COPY package*.json ./
+
+# 의존성 설치
+RUN npm install
+
+# 소스 코드 복사
+COPY . .
+
+# 포트 노출 (React 개발 서버)
+EXPOSE 3000
+
+# React 개발 서버 실행 (핫 리로드 지원)
+CMD ["npm", "start"]
+

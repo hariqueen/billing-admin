@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
 import re
 import firebase_admin
 from firebase_admin import credentials, storage
@@ -11,7 +12,8 @@ from backend.utils.secrets_manager import get_firebase_secret
 
 class MathpressoPreprocessor:
     def __init__(self):
-        self.download_dir = str(Path.home() / "Downloads")
+        self.download_dir = os.path.join(os.getcwd(), "temp_processing")
+        os.makedirs(self.download_dir, exist_ok=True)
         self.setup_firebase()
     
     def setup_firebase(self):
@@ -203,7 +205,6 @@ class MathpressoPreprocessor:
             shutil.copy2(template_path, output_path)
             print(f"템플릿 파일 복사 완료: {output_filename}")
             
-            # 워크북 로드
             workbook = load_workbook(output_path)
             
             # B9 셀에 문서번호 설정 (MMP-{년월} 형식)
@@ -283,6 +284,21 @@ class MathpressoPreprocessor:
                 detail_sheet.cell(row=4, column=6).value = amount_without_vat
                 print(f"세부내역 시트 F4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
             
+            # 로고 이미지 삽입 (B2 셀)
+            try:
+                logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'logo.png')
+                if os.path.exists(logo_path):
+                    img = Image(logo_path)
+                    if '대외공문' in workbook.sheetnames:
+                        doc_sheet = workbook['대외공문']
+                        doc_sheet.add_image(img, 'B2')
+                        print("대외공문 시트 B2 셀에 로고 이미지 삽입 완료")
+                    elif workbook.worksheets:
+                        workbook.worksheets[0].add_image(img, 'B2')
+                        print(f"{workbook.worksheets[0].title} 시트 B2 셀에 로고 이미지 삽입 완료")
+            except Exception as e:
+                print(f"로고 이미지 삽입 실패: {e}")
+            
             # 파일 저장
             workbook.save(output_path)
             workbook.close()
@@ -361,8 +377,7 @@ class MathpressoPreprocessor:
             print(f"매스프레소(콴다) 전처리 완료! 파일 생성:")
             print(f"   - 매스프레소(콴다) 청구내역서: {os.path.basename(final_invoice_path)}")
             
-            # temp_processing 폴더 정리
-            self.cleanup_temp_folder()
+            # self.cleanup_temp_folder()
             
             return True
             

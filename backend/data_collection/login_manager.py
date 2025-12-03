@@ -2,6 +2,9 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from pathlib import Path
+import os
 import time
 
 class LoginManager:
@@ -9,17 +12,54 @@ class LoginManager:
     
     def __init__(self):
         self.active_sessions = {}  # 로그인된 세션 관리
+        # Docker 컨테이너 내부에서 사용할 다운로드 경로
+        self.download_dir = "/app/downloads"
+        os.makedirs(self.download_dir, exist_ok=True)
     
     def login_account(self, account_data, keep_session=False):
         """계정 로그인"""
-        company_name = account_data['company_name']
-        account_type = account_data['account_type']
-        config = account_data['config']
+        company_name = account_data.get('company_name', 'Unknown')
+        account_type = account_data.get('account_type', 'unknown')
+        config = account_data.get('config', {})
         
-        print(f"{company_name} ({account_type.upper()}) 로그인 시작")
+        # Chrome 옵션 설정
+        try:
+            chrome_options = Options()
+            chrome_options.add_argument('--headless=new')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-software-rasterizer')
+            chrome_options.add_argument('--disable-background-timer-throttling')
+            chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+            chrome_options.add_argument('--disable-renderer-backgrounding')
+            chrome_options.add_argument('--disable-features=TranslateUI')
+            chrome_options.add_argument('--disable-ipc-flooding-protection')
+            prefs = {
+                "download.default_directory": self.download_dir,
+                "download.prompt_for_download": False,
+                "download.directory_upgrade": True,
+                "safebrowsing.enabled": True
+            }
+            chrome_options.add_experimental_option("prefs", prefs)
+        except Exception as opt_error:
+            print(f"❌ Chrome 옵션 설정 실패: {opt_error}")
+            import traceback
+            traceback.print_exc()
+            return False, None
         
-        driver = webdriver.Chrome()
-        driver.maximize_window()
+        try:
+            from selenium.webdriver.chrome.service import Service
+            service = Service(log_output="/tmp/chromedriver.log")
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.maximize_window()
+        except Exception as driver_error:
+            print(f"❌ Chrome WebDriver 생성 실패: {driver_error}")
+            import traceback
+            traceback.print_exc()
+            return False, None
         
         try:
             site_url = account_data.get('site_url')
@@ -90,8 +130,15 @@ class LoginManager:
                 return True, None
                 
         except Exception as e:
-            print(f"{company_name} ({account_type.upper()}) 로그인 실패: {e}")
-            driver.quit()
+            print(f"❌ {company_name} ({account_type.upper()}) 로그인 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"상세 에러 정보:")
+            print(traceback.format_exc())
+            try:
+                driver.quit()
+            except:
+                pass
             return False, None
     
     def get_active_session(self, company_name, account_type):

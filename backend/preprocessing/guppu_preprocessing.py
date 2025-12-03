@@ -6,13 +6,15 @@ import re
 from datetime import datetime
 from pathlib import Path
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
 
 class GuppuPreprocessor:
     def __init__(self):
-        self.download_dir = str(Path.home() / "Downloads")
+        self.download_dir = os.path.join(os.getcwd(), "temp_processing")
+        os.makedirs(self.download_dir, exist_ok=True)
         self.setup_firebase()
     
     def setup_firebase(self):
@@ -246,11 +248,19 @@ class GuppuPreprocessor:
     def update_guppu_template(self, template_path, amount_without_vat, collection_date, total_amount, sms_counts=None, ics_data=None):
         """구쁘 템플릿 업데이트"""
         try:
-            workbook = load_workbook(template_path)
-            
             # 수집 날짜로부터 년월 정보 생성
             collection_date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
             year_month = f"{collection_date_obj.year}년 {collection_date_obj.month:02d}월"
+            
+            # 파일 저장 경로 설정
+            date_prefix = f"{str(collection_date_obj.year)[2:]}{collection_date_obj.month:02d}"
+            final_filename = f"{date_prefix}_구쁘_상담솔루션 청구내역서.xlsx"
+            final_path = os.path.join(self.download_dir, final_filename)
+            
+            shutil.copy2(template_path, final_path)
+            print(f"템플릿 파일 복사 완료: {final_filename}")
+            
+            workbook = load_workbook(final_path)
             
             # 1. 시트명 변경 (예: "2025년 08월" → 수집한 달로 변경)
             for sheet in workbook.worksheets:
@@ -363,11 +373,22 @@ class GuppuPreprocessor:
                 # 하단 테이블 수식 업데이트 (B24, D24, D25)
                 self.update_formula_references(doc_sheet, year_month)
             
-            # 파일 저장 (YYMM 형식으로)
-            collection_date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
-            date_prefix = f"{str(collection_date_obj.year)[2:]}{collection_date_obj.month:02d}"
-            final_filename = f"{date_prefix}_구쁘_상담솔루션 청구내역서.xlsx"
-            final_path = os.path.join(self.download_dir, final_filename)
+            # 로고 이미지 삽입 (B2 셀)
+            try:
+                logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'logo.png')
+                if os.path.exists(logo_path):
+                    img = Image(logo_path)
+                    if '대외공문' in workbook.sheetnames:
+                        doc_sheet = workbook['대외공문']
+                        doc_sheet.add_image(img, 'B2')
+                        print("대외공문 시트 B2 셀에 로고 이미지 삽입 완료")
+                    elif workbook.worksheets:
+                        workbook.worksheets[0].add_image(img, 'B2')
+                        print(f"{workbook.worksheets[0].title} 시트 B2 셀에 로고 이미지 삽입 완료")
+            except Exception as e:
+                print(f"로고 이미지 삽입 실패: {e}")
+            
+            # 파일 저장 (이미 복사된 파일에 덮어쓰기)
             workbook.save(final_path)
             workbook.close()
             

@@ -27,6 +27,40 @@ from backend.storage.admin_storage import AdminStorage
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+# 전역 예외 핸들러 추가
+@app.errorhandler(500)
+def internal_error(error):
+    """500 에러 핸들러"""
+    import sys
+    import traceback
+    print("="*60)
+    print("❌ Flask 500 에러 핸들러 호출")
+    print(f"에러: {error}")
+    print("스택 트레이스:")
+    print(traceback.format_exc())
+    print("="*60)
+    sys.stdout.flush()
+    return jsonify({
+        "success": False,
+        "error": f"내부 서버 오류: {str(error)}"
+    }), 500
+
+# 요청 전후 로깅 미들웨어 추가 (지출결의서 요청만)
+# [DEBUG] 로그 중복 방지를 위해 before_request 로그 제거 - expense_automation 함수 내에서 이미 로그 출력
+# @app.before_request
+# def log_request_info():
+#     """요청 전 로깅"""
+#     pass
+
+@app.after_request
+def log_response_info(response):
+    """응답 후 로깅"""
+    if request.path == '/api/expense-automation':
+        import sys
+        print(f"📤 지출결의서 응답 전송: {response.status_code}")
+        sys.stdout.flush()
+    return response
+
 # 크롤링 모듈 초기화
 db_manager = DatabaseManager()
 login_manager = LoginManager()
@@ -41,6 +75,10 @@ task_status = {}
 
 print("청구자동화 API 서버 시작")
 print("모드: 실제 크롤링")
+
+# Xvfb는 headless Chrome 모드에서는 필요 없음
+# Chrome이 --headless=new 모드로 실행되므로 가상 디스플레이 불필요
+
 # 환경에 따라 호스트 자동 설정
 import socket
 def get_host_ip():
@@ -110,6 +148,12 @@ def collect_data():
         
         def run_real_crawling():
             try:
+                print(f"\n{'='*60}")
+                print(f"🚀 run_real_crawling 함수 시작 - 회사: {company_name}")
+                print(f"{'='*60}\n")
+                import sys
+                sys.stdout.flush()
+                
                 task_status[task_id]["status"] = "running"
                 task_status[task_id]["progress"] = 10
                 task_status[task_id]["log"].append("🔧 시스템 초기화 중...")
@@ -140,61 +184,94 @@ def collect_data():
                             break
                     
                     if not target_account:
-                        raise Exception(f"{company_name} SMS 계정 정보를 찾을 수 없습니다")
+                        error_msg = f"{company_name} SMS 계정 정보를 찾을 수 없습니다"
+                        print(f"❌ {error_msg}")
+                        raise Exception(error_msg)
                     
                     # SMS 로그인
-                    login_success, _ = login_manager.login_account(target_account, keep_session=True)
-                    if not login_success:
-                        raise Exception(f"{company_name} SMS 로그인 실패")
+                    task_status[task_id]["log"].append(f"{company_name} SMS 로그인 시도 중...")
+                    try:
+                        login_success, login_driver = login_manager.login_account(target_account, keep_session=True)
+                        task_status[task_id]["log"].append(f"로그인 결과: {login_success}")
                         
-                    task_status[task_id]["log"].append(f"{company_name} SMS 로그인 성공")
+                        if not login_success:
+                            error_msg = f"{company_name} SMS 로그인 실패"
+                            print(f"❌ {error_msg}")
+                            task_status[task_id]["log"].append(f"❌ {error_msg}")
+                            raise Exception(error_msg)
+                            
+                        task_status[task_id]["log"].append(f"✅ {company_name} SMS 로그인 성공")
+                    except Exception as login_err:
+                        print(f"❌ 로그인 예외 발생: {login_err}")
+                        import traceback
+                        print(traceback.format_exc())
+                        task_status[task_id]["log"].append(f"❌ 로그인 예외: {str(login_err)}")
+                        raise
                     
                     # SMS 데이터 수집
                     task_status[task_id]["progress"] = 40
                     task_status[task_id]["log"].append(f"{company_name} SMS 데이터 수집 시작...")
                     
                     # 실제 SMS 크롤링 실행
-                    sms_result = data_manager.download_sms_data(
-                        company_name, 
-                        DateConfig.get_sms_format()["start_date"], 
-                        DateConfig.get_sms_format()["end_date"]
-                    )
+                    sms_result = False
+                    sms_collection_start_time = None
+                    try:
+                        import time
+                        sms_collection_start_time = time.time()
+                        sms_result = data_manager.download_sms_data(
+                            company_name, 
+                            DateConfig.get_sms_format()["start_date"], 
+                            DateConfig.get_sms_format()["end_date"]
+                        )
+                        task_status[task_id]["log"].append(f"SMS 크롤링 결과: {sms_result}")
+                    except Exception as crawl_error:
+                        print(f"❌ SMS 크롤링 중 예외 발생: {crawl_error}")
+                        import traceback
+                        print(traceback.format_exc())
+                        task_status[task_id]["log"].append(f"❌ SMS 크롤링 중 예외: {str(crawl_error)}")
+                        sms_result = False
                     
-                    if sms_result:
-                        # SMS 수집 직후 다운로드된 파일 찾기
-                        download_dir = str(Path.home() / "Downloads")
-                        xlsx_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
+                    # SMS 수집 직후 다운로드된 파일 찾기
+                    download_dir = "/app/downloads"
+                    os.makedirs(download_dir, exist_ok=True)
+                    
+                    if sms_collection_start_time and sms_result:
+                        # SMS 수집 시작 이후 생성된 파일만 필터링
+                        all_excel_files = [f for f in os.listdir(download_dir) if f.endswith(('.xlsx', '.xls'))] if os.path.exists(download_dir) else []
+                        sms_candidate_files = []
+                        for filename in all_excel_files:
+                            file_path = os.path.join(download_dir, filename)
+                            if os.path.getctime(file_path) >= sms_collection_start_time:
+                                sms_candidate_files.append((filename, os.path.getctime(file_path)))
                         
-                        # 디싸이더스/애드프로젝트는 여러 브랜드 파일을 다운로드하므로 최근 파일들을 모두 수집
-                        if company_name == "디싸이더스/애드프로젝트":
-                            # 최근 5분 이내에 생성된 발송이력 파일들을 모두 수집
-                            import time
-                            current_time = time.time()
-                            recent_sms_files = []
+                        if sms_candidate_files:
+                            # 앤하우스의 경우 발송이력 파일 우선 찾기
+                            if company_name == "앤하우스":
+                                sms_files = [f for f, t in sms_candidate_files if '발송이력' in f]
+                                if sms_files:
+                                    latest_file = max(sms_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                                else:
+                                    latest_file = max([f for f, t in sms_candidate_files], key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                            elif company_name == "디싸이더스/애드프로젝트":
+                                # 발송이력 파일들 모두 수집
+                                recent_sms_files = [(f, t) for f, t in sms_candidate_files if '발송이력' in f]
+                                recent_sms_files.sort(key=lambda x: x[1])
+                                for filename, ctime in recent_sms_files:
+                                    task_status[task_id]["files"].append(filename)
+                                    task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {filename}")
+                                if recent_sms_files:
+                                    task_status[task_id]["sms_collection_time"] = recent_sms_files[-1][1]
+                                latest_file = None
+                            else:
+                                latest_file = max([f for f, t in sms_candidate_files], key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
                             
-                            for filename in xlsx_files:
-                                if '발송이력' in filename:
-                                    file_path = os.path.join(download_dir, filename)
-                                    if (current_time - os.path.getctime(file_path)) < 300:  # 5분 이내
-                                        recent_sms_files.append((filename, os.path.getctime(file_path)))
-                            
-                            # 시간순으로 정렬하여 추가
-                            recent_sms_files.sort(key=lambda x: x[1])
-                            for filename, ctime in recent_sms_files:
-                                task_status[task_id]["files"].append(filename)
-                                task_status[task_id]["log"].append(f"SMS 파일 수집 완료: {filename}")
-                            
-                            # 가장 최근 파일의 시간을 SMS 수집 시간으로 기록
-                            if recent_sms_files:
-                                task_status[task_id]["sms_collection_time"] = recent_sms_files[-1][1]
-                        else:
-                            # 다른 회사들은 기존 로직 사용
-                            latest_file = max(xlsx_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
-                            task_status[task_id]["sms_collection_time"] = os.path.getctime(os.path.join(download_dir, latest_file))
-                            task_status[task_id]["files"].append(latest_file)
-                            task_status[task_id]["log"].append(f"SMS 파일 수집 완료: {latest_file}")
-                    else:
-                        task_status[task_id]["log"].append("SMS 데이터 수집 실패 또는 데이터 없음")
+                            if latest_file:
+                                task_status[task_id]["sms_collection_time"] = os.path.getctime(os.path.join(download_dir, latest_file))
+                                task_status[task_id]["files"].append(latest_file)
+                                task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {latest_file}")
+                    
+                    if not sms_result:
+                        task_status[task_id]["log"].append("⚠️ SMS 데이터 수집 실패")
                     
                     # 디싸이더스/애드프로젝트인 경우 CHAT 데이터도 수집
                     if company_name == "디싸이더스/애드프로젝트":
@@ -264,8 +341,14 @@ def collect_data():
                     task_status[task_id]["log"].append(f" {company_name} SMS 세션 종료")
                         
                 except Exception as sms_error:
-                    task_status[task_id]["log"].append(f" SMS 수집 중 오류: {str(sms_error)}")
-                    # SMS 실패해도 CALL은 시도
+                    error_detail = str(sms_error)
+                    import traceback
+                    error_traceback = traceback.format_exc()
+                    print(f"❌ {company_name} SMS 수집 중 오류 발생:")
+                    print(f"   오류 메시지: {error_detail}")
+                    print(f"   상세 스택 트레이스:")
+                    print(error_traceback)
+                    task_status[task_id]["log"].append(f"❌ {company_name} SMS 수집 중 오류: {error_detail}")
                 
                 # 2단계: 앤하우스인 경우 CALL 데이터도 수집
                 if company_name == "앤하우스":
@@ -301,9 +384,10 @@ def collect_data():
                         
                         if call_result:
                             # CALL 수집 직후 다운로드된 파일 찾기
-                            download_dir = str(Path.home() / "Downloads")
+                            download_dir = "/app/downloads"
+                            os.makedirs(download_dir, exist_ok=True)
                             # .xlsx와 .xls 파일 모두 찾기
-                            excel_files = [f for f in os.listdir(download_dir) if f.endswith(('.xlsx', '.xls'))]
+                            excel_files = [f for f in os.listdir(download_dir) if f.endswith(('.xlsx', '.xls'))] if os.path.exists(download_dir) else []
                             
                             # SMS 파일 수집 시간 기록 (CALL과 구분하기 위해)
                             sms_collection_time = task_status[task_id].get("sms_collection_time")
@@ -314,7 +398,8 @@ def collect_data():
                                 for file in excel_files:
                                     file_path = os.path.join(download_dir, file)
                                     file_ctime = os.path.getctime(file_path)
-                                    if file_ctime > sms_collection_time:
+                                    # 시간 필터링 + 파일명 기반 필터링 (통화내역 포함 확인)
+                                    if file_ctime > sms_collection_time and '통화내역' in file:
                                         call_files.append(file)
                                 
                                 if call_files:
@@ -323,12 +408,29 @@ def collect_data():
                                     task_status[task_id]["files"].append(latest_call_file)
                                     task_status[task_id]["log"].append(f" CALL 파일 수집 완료: {latest_call_file}")
                                 else:
-                                    task_status[task_id]["log"].append(" CALL 데이터 수집 실패: 새 파일이 생성되지 않음")
+                                    # 통화내역 키워드 없이 시간 기반으로 재시도
+                                    call_files_time_based = [f for f in excel_files if os.path.getctime(os.path.join(download_dir, f)) > sms_collection_time]
+                                    if call_files_time_based:
+                                        latest_call_file = max(call_files_time_based, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                                        task_status[task_id]["files"].append(latest_call_file)
+                                        task_status[task_id]["log"].append(f" CALL 파일 수집 완료 (시간 기반): {latest_call_file}")
+                                    else:
+                                        task_status[task_id]["log"].append(" CALL 데이터 수집 실패: 새 파일이 생성되지 않음")
                             else:
-                                # SMS 수집 시간이 없으면 기존 로직 사용
-                                latest_call_file = max(excel_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
-                                task_status[task_id]["files"].append(latest_call_file)
-                                task_status[task_id]["log"].append(f" CALL 파일 수집 완료: {latest_call_file}")
+                                # SMS 수집 시간이 없으면 파일명으로 CALL 파일 찾기
+                                call_files_by_name = [f for f in excel_files if '통화내역' in f]
+                                if call_files_by_name:
+                                    latest_call_file = max(call_files_by_name, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                                    task_status[task_id]["files"].append(latest_call_file)
+                                    task_status[task_id]["log"].append(f" CALL 파일 수집 완료: {latest_call_file}")
+                                else:
+                                    # 통화내역 키워드가 없으면 가장 최근 파일 (하위 호환성)
+                                    if excel_files:
+                                        latest_call_file = max(excel_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
+                                        task_status[task_id]["files"].append(latest_call_file)
+                                        task_status[task_id]["log"].append(f" CALL 파일 수집 완료 (가장 최근 파일): {latest_call_file}")
+                                    else:
+                                        task_status[task_id]["log"].append(" CALL 데이터 수집 실패: 파일이 없음")
                         else:
                             task_status[task_id]["log"].append(" CALL 데이터 수집 실패 또는 데이터 없음")
                         
@@ -343,13 +445,13 @@ def collect_data():
                 if task_status[task_id]["files"]:
                     task_status[task_id]["status"] = "completed"
                     task_status[task_id]["progress"] = 100
-                    task_status[task_id]["log"].append(" 데이터 수집 완료!")
+                    task_status[task_id]["log"].append("✅ 데이터 수집 완료!")
+                    print(f"✅ {company_name} 크롤링 완료 - 파일: {len(task_status[task_id]['files'])}개")
                 else:
                     task_status[task_id]["status"] = "completed"
                     task_status[task_id]["progress"] = 100
-                    task_status[task_id]["log"].append(" 수집된 파일이 없습니다 (데이터 없음 또는 오류)")
-                
-                print(f" {company_name} 크롤링 완료")
+                    task_status[task_id]["log"].append("⚠️ 수집된 파일이 없습니다 (데이터 없음 또는 오류)")
+                    print(f"⚠️ {company_name} 크롤링 완료 - 하지만 파일이 없음 (오류 가능성)")
                 
             except Exception as e:
                 task_status[task_id]["status"] = "failed"
@@ -390,7 +492,8 @@ def upload_file():
             collected_filename = request.form.get('collected_filename')
             if collected_filename:
                 # 다운로드 폴더에서 파일 찾기
-                download_dir = str(Path.home() / "Downloads")
+                download_dir = "/app/downloads"
+                os.makedirs(download_dir, exist_ok=True)
                 source_path = os.path.join(download_dir, collected_filename)
                 
                 # 파일 존재 여부와 접근 가능성 확인
@@ -484,13 +587,12 @@ def auto_upload():
             return jsonify({"error": "필수 파라미터 누락"}), 400
         
         # 다운로드 폴더에서 파일 확인
-        download_dir = str(Path.home() / "Downloads")
+        download_dir = "/app/downloads"
+        os.makedirs(download_dir, exist_ok=True)
         source_path = os.path.join(download_dir, collected_filename)
         
         if not os.path.exists(source_path):
             return jsonify({"error": f"파일을 찾을 수 없습니다: {collected_filename}"}), 404
-        
-
         
         return jsonify({
             "filename": collected_filename,
@@ -504,19 +606,54 @@ def auto_upload():
 
 @app.route('/api/download/<filename>', methods=['GET'])
 def download_file(filename):
-    """파일 다운로드 (로컬 Downloads 폴더에서)"""
+    """파일 다운로드 (다양한 디렉토리에서 검색)"""
     try:
-        from pathlib import Path
+        from urllib.parse import unquote
         
-        # 로컬 Downloads 폴더에서 파일 찾기
-        download_dir = str(Path.home() / "Downloads")
-        file_path = os.path.join(download_dir, filename)
+        # URL 디코딩 (공백 등이 %20으로 인코딩되어 있을 수 있음)
+        decoded_filename = unquote(filename)
         
-        if not os.path.exists(file_path):
-            return jsonify({"error": f"파일을 찾을 수 없습니다: {filename}"}), 404
-        return send_file(file_path, as_attachment=True, download_name=filename)
+        # 검색할 디렉토리 목록
+        search_dirs = [
+            "/app/downloads",  # 크롤링으로 다운로드된 파일
+            "temp_processing",  # 전처리된 파일
+        ]
+        
+        # 각 디렉토리에서 파일 찾기
+        for search_dir in search_dirs:
+            os.makedirs(search_dir, exist_ok=True)
+            file_path = os.path.join(search_dir, decoded_filename)
+            
+            if os.path.exists(file_path):
+                return send_file(file_path, as_attachment=True, download_name=decoded_filename)
+        
+        # 파일을 찾지 못한 경우 더 유연하게 검색 (부분 일치)
+        print(f"❌ 파일을 찾을 수 없습니다: {decoded_filename}")
+        print(f"   검색한 디렉토리: {search_dirs}")
+        
+        # 부분 일치로 파일 검색
+        for search_dir in search_dirs:
+            if os.path.exists(search_dir):
+                files = os.listdir(search_dir)
+                print(f"   {search_dir}에 있는 파일 수: {len(files)}")
+                
+                # 파일명에서 핵심 부분 추출 (날짜_회사명_...)
+                decoded_base = decoded_filename.replace(" 청구내역서.xlsx", "").replace(".xlsx", "")
+                for f in files:
+                    file_base = f.replace(" 청구내역서.xlsx", "").replace(".xlsx", "")
+                    # 핵심 부분이 일치하면 찾은 것으로 간주
+                    if decoded_base in file_base or file_base in decoded_base:
+                        file_path = os.path.join(search_dir, f)
+                        if os.path.exists(file_path):
+                            print(f"   ✅ 부분 일치 파일 발견: {f}")
+                            return send_file(file_path, as_attachment=True, download_name=decoded_filename)
+        
+        return jsonify({"error": f"파일을 찾을 수 없습니다: {decoded_filename}"}), 404
         
     except Exception as e:
+        print(f"❌ 다운로드 오류: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/bill-image/<filename>', methods=['GET'])
@@ -571,7 +708,8 @@ def process_file():
             
             if success:
                 # 다운로드 폴더에서 생성된 파일명 찾기
-                download_dir = str(Path.home() / "Downloads")
+                download_dir = "/app/downloads"
+                os.makedirs(download_dir, exist_ok=True)
                 processed_files = []
                 
                 if os.path.exists(download_dir):
@@ -604,7 +742,8 @@ def process_file():
             
             if success:
                 # 다운로드 폴더에서 생성된 파일명 찾기
-                download_dir = str(Path.home() / "Downloads")
+                download_dir = "/app/downloads"
+                os.makedirs(download_dir, exist_ok=True)
                 processed_files = []
                 
                 if os.path.exists(download_dir):
@@ -651,7 +790,8 @@ def process_file():
             
             if success:
                 # 다운로드 폴더에서 생성된 파일명 찾기
-                download_dir = str(Path.home() / "Downloads")
+                download_dir = "/app/downloads"
+                os.makedirs(download_dir, exist_ok=True)
                 processed_files = []
                 
                 if os.path.exists(download_dir):
@@ -800,10 +940,40 @@ def clear_processed_files(company_name):
 
 @app.route('/api/get-processed-files', methods=['GET'])
 def get_processed_files():
-    """저장된 청구서 결과 조회"""
+    """저장된 청구서 결과 및 파일 목록 조회"""
     try:
         processed_files = admin_storage.get_processed_files()
-        return jsonify({"processed_files": processed_files})
+        uploaded_files = admin_storage.get_uploaded_files()
+        collected_files = admin_storage.get_collected_files()
+        return jsonify({
+            "processed_files": processed_files,
+            "uploaded_files": uploaded_files,
+            "collected_files": collected_files
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/save-uploaded-files', methods=['POST'])
+def save_uploaded_files():
+    """업로드된 파일 목록 저장"""
+    try:
+        data = request.get_json()
+        company_name = data.get('company_name')
+        uploaded_files = data.get('uploaded_files', [])
+        admin_storage.save_uploaded_files(company_name, uploaded_files)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/save-collected-files', methods=['POST'])
+def save_collected_files():
+    """수집된 파일 목록 저장"""
+    try:
+        data = request.get_json()
+        company_name = data.get('company_name')
+        collected_files = data.get('collected_files', [])
+        admin_storage.save_collected_files(company_name, collected_files)
+        return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -881,13 +1051,25 @@ def clear_company_processed_files():
 @app.route('/api/expense-automation', methods=['POST'])
 def expense_automation():
     """지출결의서 자동화 실행"""
+    import sys
     try:
+        print("="*60)
+        print("✅✅✅ 지출결의서 자동화 API 엔드포인트 진입 ✅✅✅")
+        print(f"   요청 메서드: {request.method}")
+        print(f"   Content-Type: {request.content_type}")
+        print(f"   파일 키: {list(request.files.keys())}")
+        print(f"   Form 키: {list(request.form.keys())}")
+        print("="*60)
+        sys.stdout.flush()
+        
         # 파일 업로드 확인
         if 'file' not in request.files:
+            print("❌ 오류: 파일이 업로드되지 않았습니다")
             return jsonify({"error": "파일이 업로드되지 않았습니다"}), 400
         
         file = request.files['file']
         if file.filename == '':
+            print("❌ 오류: 파일명이 비어있습니다")
             return jsonify({"error": "파일이 선택되지 않았습니다"}), 400
         
         # 파라미터 받기
@@ -898,13 +1080,15 @@ def expense_automation():
         password = request.form.get('password', '')
         
         # 디버깅을 위한 파라미터 로그
-        print(f"받은 파라미터:")
+        print(f"📋 받은 파라미터:")
         print(f"   category: '{category}'")
         print(f"   start_date: '{start_date}'")
         print(f"   end_date: '{end_date}'")
         print(f"   user_id: '{user_id}'")
         print(f"   password: '***' (길이: {len(password)})")
         print(f"   file: '{file.filename}'")
+        import sys
+        sys.stdout.flush()
         
         # 필수 파라미터 검증
         if not all([start_date, end_date, user_id, password]):
@@ -913,59 +1097,134 @@ def expense_automation():
             if not end_date: missing_params.append('end_date')
             if not user_id: missing_params.append('user_id')
             if not password: missing_params.append('password')
-            print(f"누락된 파라미터: {missing_params}")
+            print(f"❌ 누락된 파라미터: {missing_params}")
+            sys.stdout.flush()
             return jsonify({"error": f"필수 파라미터가 누락되었습니다: {', '.join(missing_params)}"}), 400
         
         # 날짜 형식 검증
         if len(start_date) != 8 or len(end_date) != 8:
+            print(f"❌ 날짜 형식 오류: start_date={start_date}, end_date={end_date}")
+            sys.stdout.flush()
             return jsonify({"error": "날짜 형식이 올바르지 않습니다 (YYYYMMDD)"}), 400
         
         # 임시 파일로 저장
+        print(f"📁 임시 파일 저장 시작...")
+        sys.stdout.flush()
         temp_dir = tempfile.mkdtemp()
         file_path = os.path.join(temp_dir, file.filename)
-        file.save(file_path)
+        try:
+            file.save(file_path)
+            print(f"✅ 임시 파일 저장 완료: {file_path}")
+            print(f"   파일 크기: {os.path.getsize(file_path)} bytes")
+            sys.stdout.flush()
+        except Exception as save_error:
+            print(f"❌ 파일 저장 실패: {save_error}")
+            import traceback
+            print(traceback.format_exc())
+            sys.stdout.flush()
+            return jsonify({"error": f"파일 저장 실패: {str(save_error)}"}), 500
         
         try:
             # 데이터 처리
-            print(f"지출결의서 자동화 시작: {file.filename}")
+            print(f"\n🔧 지출결의서 자동화 시작: {file.filename}")
+            sys.stdout.flush()
+            
+            print(f"📊 1단계: ExpenseDataProcessor 초기화...")
+            sys.stdout.flush()
             data_processor = ExpenseDataProcessor()
             
             # 파일 로드
-            data = data_processor.load_file(file_path)
-            print(f"파일 로드 완료: {len(data)}개 레코드")
+            print(f"📥 2단계: 파일 로드 시작...")
+            sys.stdout.flush()
+            try:
+                data = data_processor.load_file(file_path)
+                print(f"✅ 파일 로드 완료: {len(data)}개 레코드")
+                print(f"   컬럼: {list(data.columns)}")
+                sys.stdout.flush()
+            except Exception as load_error:
+                print(f"❌ 파일 로드 실패: {load_error}")
+                import traceback
+                print(traceback.format_exc())
+                sys.stdout.flush()
+                return jsonify({
+                    "success": False,
+                    "error": f"파일 로드 실패: {str(load_error)}"
+                }), 500
             
             # 데이터 처리
-            processed_data = data_processor.process_data(data, category, start_date, end_date)
-            print(f"데이터 처리 완료: {len(processed_data)}개 레코드")
+            print(f"🔄 3단계: 데이터 처리 시작...")
+            sys.stdout.flush()
+            try:
+                processed_data = data_processor.process_data(data, category, start_date, end_date)
+                print(f"✅ 데이터 처리 완료: {len(processed_data)}개 레코드")
+                sys.stdout.flush()
+            except Exception as process_error:
+                print(f"❌ 데이터 처리 실패: {process_error}")
+                import traceback
+                print(traceback.format_exc())
+                sys.stdout.flush()
+                return jsonify({
+                    "success": False,
+                    "error": f"데이터 처리 실패: {str(process_error)}"
+                }), 500
             
             if not processed_data:
+                print(f"⚠️ 처리할 데이터가 없습니다")
+                sys.stdout.flush()
                 return jsonify({"error": "처리할 데이터가 없습니다"}), 400
             
             # 그룹웨어 자동화 실행
-            automation = GroupwareAutomation()
-            
-            def progress_callback(message):
-                print(f" 진행상황: {message}")
-            
-            automation.run_automation(
-                processed_data=processed_data,
-                progress_callback=progress_callback,
-                user_id=user_id,
-                password=password
-            )
-            
-            print(" 지출결의서 자동화 완료!")
-            
-            return jsonify({
-                "success": True,
-                "message": "지출결의서 자동입력이 완료되었습니다",
-                "processed_count": len(processed_data),
-                "total_count": len(data)
-            })
+            print(f"🤖 4단계: 그룹웨어 자동화 시작...")
+            sys.stdout.flush()
+            try:
+                automation = GroupwareAutomation()
+                
+                def progress_callback(message):
+                    print(f"   진행상황: {message}")
+                    sys.stdout.flush()
+                
+                automation.run_automation(
+                    processed_data=processed_data,
+                    progress_callback=progress_callback,
+                    user_id=user_id,
+                    password=password
+                )
+                
+                print(f"✅ 지출결의서 자동화 완료!")
+                sys.stdout.flush()
+                
+                return jsonify({
+                    "success": True,
+                    "message": "지출결의서 자동입력이 완료되었습니다",
+                    "processed_count": len(processed_data),
+                    "total_count": len(data)
+                })
+            except ValueError as login_error:
+                # 로그인 실패 (정상적인 실패 케이스) - 200으로 반환
+                error_msg = str(login_error)
+                if "로그인 실패:" in error_msg:
+                    error_msg = error_msg.replace("로그인 실패: ", "")
+                print(f"⚠️ 로그인 실패: {error_msg}")
+                sys.stdout.flush()
+                return jsonify({
+                    "success": False,
+                    "error": error_msg
+                }), 200
+            except Exception as automation_error:
+                print(f"❌ 그룹웨어 자동화 실패: {automation_error}")
+                import traceback
+                print(traceback.format_exc())
+                sys.stdout.flush()
+                return jsonify({
+                    "success": False,
+                    "error": f"그룹웨어 자동화 실패: {str(automation_error)}"
+                }), 500
             
         except Exception as e:
-            print(f" 자동화 실행 오류: {e}")
-            print(f" 상세 오류: {traceback.format_exc()}")
+            print(f"❌ 자동화 실행 중 예외 발생: {e}")
+            import traceback
+            print(traceback.format_exc())
+            sys.stdout.flush()
             return jsonify({
                 "success": False,
                 "error": f"자동화 실행 중 오류가 발생했습니다: {str(e)}"
@@ -976,15 +1235,60 @@ def expense_automation():
             try:
                 if os.path.exists(file_path):
                     os.remove(file_path)
+                    print(f"🗑️ 임시 파일 삭제: {file_path}")
                 if os.path.exists(temp_dir):
                     os.rmdir(temp_dir)
-            except:
-                pass
+                    print(f"🗑️ 임시 디렉토리 삭제: {temp_dir}")
+            except Exception as cleanup_error:
+                print(f"⚠️ 임시 파일 정리 실패: {cleanup_error}")
                 
     except Exception as e:
-        print(f"API 오류: {e}")
-        print(f"상세 오류: {traceback.format_exc()}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ API 오류 (최상위 예외): {e}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(error_traceback)
+        sys.stdout.flush()
+        return jsonify({
+            "success": False,
+            "error": f"API 오류: {str(e)}",
+            "traceback": error_traceback[:500] if len(error_traceback) > 500 else error_traceback
+        }), 500
+
+@app.route('/api/reset', methods=['POST'])
+def reset_data():
+    """초기화: temp_processing, bill_images 디렉토리 비우기 및 admin_storage.json 초기화"""
+    try:
+        # 디렉토리 비우기 헬퍼 함수
+        def clear_directory(dir_path):
+            """디렉토리 내 모든 파일 삭제"""
+            if os.path.exists(dir_path):
+                for filename in os.listdir(dir_path):
+                    file_path = os.path.join(dir_path, filename)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                    except Exception as e:
+                        print(f"파일 삭제 실패: {file_path}, 오류: {e}")
+        
+        # 1. 디렉토리들 비우기
+        clear_directory("temp_processing")
+        clear_directory("bill_images")
+        
+        # 2. admin_storage.json 초기화
+        admin_storage.clear_all()
+        
+        return jsonify({
+            "success": True,
+            "message": "초기화가 완료되었습니다."
+        })
+    except Exception as e:
+        print(f"초기화 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "초기화 중 오류가 발생했습니다."
+        }), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=False)

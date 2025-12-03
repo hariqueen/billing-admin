@@ -1,5 +1,7 @@
 import os
 import json
+import time
+import fcntl
 from datetime import datetime
 
 class AdminStorage:
@@ -7,39 +9,167 @@ class AdminStorage:
     
     def __init__(self, storage_file="admin_storage.json"):
         self.storage_file = storage_file
+        self.lock_file = f"{storage_file}.lock"
         # 메모리 캐시 제거 - 항상 파일에서 직접 읽어옴
         self.ensure_file_exists()
     
+    def _acquire_lock(self, timeout=5):
+        """파일 락 획득 (최대 timeout 초 대기)"""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                # 락 파일 열기 (exclusive 모드)
+                lock_fd = os.open(self.lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(lock_fd)
+                return True
+            except FileExistsError:
+                # 락이 이미 있으면 잠시 대기
+                time.sleep(0.1)
+            except Exception as e:
+                print(f"락 획득 실패: {e}")
+                return False
+        return False
+    
+    def _release_lock(self):
+        """파일 락 해제"""
+        try:
+            if os.path.exists(self.lock_file):
+                os.remove(self.lock_file)
+        except Exception as e:
+            print(f"락 해제 실패: {e}")
+    
     def ensure_file_exists(self):
-        """저장소 파일이 존재하지 않으면 기본 구조로 생성"""
+        """저장소 파일이 존재하지 않으면 기본 구조로 생성, 존재하면 필수 섹션 추가"""
         if not os.path.exists(self.storage_file):
             default_data = {
                 "bill_amounts": {},
-                "processed_files": {}
+                "processed_files": {},
+                "uploaded_files": {},
+                "collected_files": {}
             }
             self.save_data_direct(default_data)
             print(f"기본 저장소 파일 생성: {self.storage_file}")
+        else:
+            # 기존 파일에 필수 섹션이 없으면 추가
+            try:
+                data = self.load_data()
+                needs_update = False
+                
+                if "uploaded_files" not in data:
+                    data["uploaded_files"] = {}
+                    needs_update = True
+                if "collected_files" not in data:
+                    data["collected_files"] = {}
+                    needs_update = True
+                
+                if needs_update:
+                    self.save_data_direct(data)
+                    print(f"저장소 파일 구조 업데이트: {self.storage_file}")
+            except Exception as e:
+                print(f"저장소 파일 구조 확인 실패: {e}")
     
     def load_data(self):
-        """저장된 데이터 로드 (메모리 캐시 없음)"""
+        """저장된 데이터 로드 (메모리 캐시 없음, 락 사용)"""
+        if not self._acquire_lock():
+            print("락 획득 실패, 기본값 반환")
+            return {
+                "bill_amounts": {},
+                "processed_files": {},
+                "uploaded_files": {},
+                "collected_files": {}
+            }
+        
         try:
+            # 파일이 비어있거나 손상된 경우 처리
+            if not os.path.exists(self.storage_file) or os.path.getsize(self.storage_file) == 0:
+                return {
+                    "bill_amounts": {},
+                    "processed_files": {},
+                    "uploaded_files": {},
+                    "collected_files": {}
+                }
+            
             with open(self.storage_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                # 파일 락 적용 (읽기 중 다른 프로세스가 쓰지 못하도록)
+                try:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)  # Shared lock (읽기)
+                    content = f.read()
+                    if not content.strip():
+                        return {
+                            "bill_amounts": {},
+                            "processed_files": {},
+                            "uploaded_files": {},
+                            "collected_files": {}
+                        }
+                    return json.loads(content)
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)  # Unlock
+        except json.JSONDecodeError as e:
+            print(f"어드민 데이터 로드 실패 (JSON 파싱 오류): {e}")
+            # 손상된 파일 백업
+            try:
+                backup_file = f"{self.storage_file}.backup_{int(time.time())}"
+                if os.path.exists(self.storage_file):
+                    os.rename(self.storage_file, backup_file)
+                    print(f"손상된 파일 백업: {backup_file}")
+            except:
+                pass
+            return {
+                "bill_amounts": {},
+                "processed_files": {},
+                "uploaded_files": {},
+                "collected_files": {}
+            }
         except Exception as e:
             print(f"어드민 데이터 로드 실패: {e}")
             return {
                 "bill_amounts": {},
-                "processed_files": {}
+                "processed_files": {},
+                "uploaded_files": {},
+                "collected_files": {}
             }
+        finally:
+            self._release_lock()
     
     def save_data_direct(self, data):
-        """데이터를 직접 JSON 파일에 저장"""
+        """데이터를 직접 JSON 파일에 저장 (필수 섹션 보장, 락 사용)"""
+        if not self._acquire_lock(timeout=10):
+            print("락 획득 실패, 저장 취소")
+            return False
+        
         try:
-            with open(self.storage_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            # 필수 섹션 보장 (기존 파일에 없을 수 있음)
+            if "uploaded_files" not in data:
+                data["uploaded_files"] = {}
+            if "collected_files" not in data:
+                data["collected_files"] = {}
+            
+            # 임시 파일에 먼저 저장 (원자적 쓰기)
+            temp_file = f"{self.storage_file}.tmp"
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock (쓰기)
+                try:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())  # 디스크에 강제 쓰기
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            
+            # 원자적 이동 (rename은 원자적 연산)
+            os.rename(temp_file, self.storage_file)
             print(f"어드민 데이터 저장 완료")
+            return True
         except Exception as e:
             print(f"어드민 데이터 저장 실패: {e}")
+            # 임시 파일 정리
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except:
+                pass
+            return False
+        finally:
+            self._release_lock()
     
     # === 고지서 금액 관련 메서드 ===
     
@@ -98,6 +228,49 @@ class AdminStorage:
             del data["processed_files"][company_name]
             self.save_data_direct(data)
             print(f"{company_name} 청구서 결과 초기화")
+    
+    def clear_all(self):
+        """모든 데이터 초기화 (bill_amounts와 processed_files 모두 비우기)"""
+        default_data = {
+            "bill_amounts": {},
+            "processed_files": {},
+            "uploaded_files": {},
+            "collected_files": {}
+        }
+        self.save_data_direct(default_data)
+        print("admin_storage.json 전체 초기화 완료")
+    
+    # === 업로드된 파일 관련 메서드 ===
+    
+    def get_uploaded_files(self):
+        """업로드된 파일 목록 조회"""
+        data = self.load_data()
+        return data.get("uploaded_files", {})
+    
+    def save_uploaded_files(self, company_name, uploaded_files):
+        """업로드된 파일 목록 저장"""
+        data = self.load_data()
+        if "uploaded_files" not in data:
+            data["uploaded_files"] = {}
+        data["uploaded_files"][company_name] = uploaded_files
+        self.save_data_direct(data)
+        print(f"{company_name} 업로드된 파일 목록 저장: {len(uploaded_files)}개")
+    
+    # === 수집된 파일 관련 메서드 ===
+    
+    def get_collected_files(self):
+        """수집된 파일 목록 조회"""
+        data = self.load_data()
+        return data.get("collected_files", {})
+    
+    def save_collected_files(self, company_name, collected_files):
+        """수집된 파일 목록 저장"""
+        data = self.load_data()
+        if "collected_files" not in data:
+            data["collected_files"] = {}
+        data["collected_files"][company_name] = collected_files
+        self.save_data_direct(data)
+        print(f"{company_name} 수집된 파일 목록 저장: {len(collected_files)}개")
     
     # === 마이그레이션 메서드 ===
     

@@ -1,0 +1,66 @@
+# Git
+.git
+.gitignore
+
+# 환경변수/비밀
+.env
+.env.*
+*.pem
+*.key
+*-firebase-adminsdk-*.json
+firebase-credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+ENV/
+env/
+*.egg-info/
+.eggs/
+*.egg
+
+# Node/Frontend
+node_modules/
+frontend/node_modules/
+frontend/.parcel-cache/
+frontend/.next/
+frontend/dist/
+frontend/build/
+
+# OS/에디터
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 로그/임시 파일
+*.log
+nohup.out
+temp/
+tmp/
+temp_processing/
+*.tmp
+*.temp
+
+# 데이터 파일
+*.csv
+*.xlsx
+*.xls
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 문서
+*.md
+README.md
+
+# 기타
+.coverage
+.pytest_cache/
+

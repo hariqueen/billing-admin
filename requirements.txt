@@ -4,7 +4,8 @@ firebase-admin
 boto3
 python-dotenv
 pandas
-openpyxl
+openpyxl == 3.1.5
+Pillow
 requests
 selenium
 webdriver-manager
