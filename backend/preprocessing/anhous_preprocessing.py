@@ -211,8 +211,8 @@ class AnhousPreprocessor:
             
             new_filename = f"{date_prefix}_앤하우스 수수료 청구내역서_{team_suffix}.xlsx"
             
-            # 다운로드 폴더에 저장
-            download_dir = os.path.expanduser("~/Downloads")
+            # 다운로드 폴더에 저장 (/app/downloads로 통일)
+            download_dir = "/app/downloads"
             os.makedirs(download_dir, exist_ok=True)
             output_path = os.path.join(download_dir, new_filename)
             
@@ -521,7 +521,7 @@ class AnhousPreprocessor:
             print(f"    컬럼: {list(sms_df.columns)}")
             
             # 발송상태가 "성공(전달)"인 것만 필터링
-            success_df = sms_df[sms_df['발송상태'] == '성공(전달)']
+            success_df = sms_df[sms_df['발송상태'] == '성공(전달)'].copy()
             print(f"   성공 전달 건수: {len(success_df)}건")
             
             # 발신번호를 문자열로 변환하고 정리
