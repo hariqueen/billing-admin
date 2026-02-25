@@ -1,21 +1,16 @@
 import React, { useState } from 'react';
 
+const API_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:5001'
+  : `http://${window.location.hostname}:5001`;
+
 const LoginForm = ({ onLogin }) => {
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // 하드코딩된 사용자 정보
-  const users = {
-    '2025040135': { name: '김하리', position: '주임' },
-    '2025070184': { name: '김정웅', position: '이사' },
-    '2025040003': { name: '허수빈', position: '과장' },
-    '2023010297': { name: '장정근', position: '부장' },
-    '2025070803': { name: '강주희', position: '부장' },
-    '2025110391': { name: '이우진', position: '차장' }
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -24,17 +19,31 @@ const LoginForm = ({ onLogin }) => {
       return;
     }
 
-    const user = users[employeeId];
-    if (user) {
-      // 성공적으로 로그인 (비밀번호도 함께 저장)
-      onLogin({
-        employeeId,
-        name: user.name,
-        position: user.position,
-        password: password  // 비밀번호도 포함
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ employeeId, password })
       });
-    } else {
-      setError('등록되지 않은 사번입니다.');
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        setError(result.error || '로그인에 실패했습니다.');
+        return;
+      }
+
+      onLogin({
+        ...result.user,
+        password // 자동화 화면에서 기존과 동일하게 사용
+      });
+    } catch (err) {
+      console.error('로그인 요청 오류:', err);
+      setError('로그인 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -135,22 +144,27 @@ const LoginForm = ({ onLogin }) => {
 
           <button
             type="submit"
+            disabled={isLoading}
             style={{
               width: '100%',
               padding: '12px',
-              backgroundColor: '#007bff',
+              backgroundColor: isLoading ? '#7eaee3' : '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
               fontSize: '16px',
               fontWeight: '500',
-              cursor: 'pointer',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               transition: 'background-color 0.2s'
             }}
-            onMouseOver={(e) => e.target.style.backgroundColor = '#0056b3'}
-            onMouseOut={(e) => e.target.style.backgroundColor = '#007bff'}
+            onMouseOver={(e) => {
+              if (!isLoading) e.target.style.backgroundColor = '#0056b3';
+            }}
+            onMouseOut={(e) => {
+              if (!isLoading) e.target.style.backgroundColor = '#007bff';
+            }}
           >
-            로그인
+            {isLoading ? '로그인 중...' : '로그인'}
           </button>
         </form>
 

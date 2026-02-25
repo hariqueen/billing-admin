@@ -1,7 +1,4 @@
-import os
-import json
-from dotenv import load_dotenv
-load_dotenv()
+import hashlib
 import firebase_admin
 from firebase_admin import credentials, firestore
 from backend.utils.secrets_manager import get_firebase_secret
@@ -17,6 +14,11 @@ class DatabaseManager:
             print(f"⚠️ Firebase 초기화 실패 (로컬 개발 환경일 수 있음): {e}")
             print("   Firebase 기능은 사용할 수 없지만, 다른 기능은 정상 작동합니다.")
             self.db = None
+
+    @staticmethod
+    def _hash_password(password):
+        """비밀번호 해시 생성"""
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
     
     def _initialize_firebase(self):
         """Firebase 초기화"""
@@ -192,3 +194,47 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ 계정 수정 오류: {e}")
             raise e
+
+    def authenticate_admin_user(self, employee_id, password):
+        """관리자 로그인 인증"""
+        if self.db is None:
+            raise Exception("Firebase가 초기화되지 않았습니다.")
+
+        doc = self.db.collection("admin_users").document(employee_id).get()
+        if not doc.exists:
+            return None
+
+        user = doc.to_dict()
+        password_hash = self._hash_password(password)
+        if user.get('password_hash') != password_hash:
+            return None
+
+        return {
+            'employeeId': user.get('employee_id'),
+            'name': user.get('name'),
+            'position': user.get('position')
+        }
+
+    def update_admin_user(self, employee_id, position=None, password=None):
+        """관리자 계정의 직급/비밀번호를 수정"""
+        if self.db is None:
+            raise Exception("Firebase가 초기화되지 않았습니다.")
+
+        doc_ref = self.db.collection("admin_users").document(employee_id)
+        snapshot = doc_ref.get()
+        if not snapshot.exists:
+            raise Exception("관리자 계정을 찾을 수 없습니다.")
+
+        updates = {'updated_at': firestore.SERVER_TIMESTAMP}
+        if position is not None:
+            updates['position'] = position
+        if password is not None:
+            updates['password_hash'] = self._hash_password(password)
+
+        doc_ref.update(updates)
+        updated = doc_ref.get().to_dict()
+        return {
+            'employeeId': updated.get('employee_id'),
+            'name': updated.get('name'),
+            'position': updated.get('position')
+        }

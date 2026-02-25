@@ -18,12 +18,8 @@ class WconceptPreprocessor:
     def setup_firebase(self):
         """Firebase Storage 연결 설정"""
         try:
-            from dotenv import load_dotenv
-            
-            load_dotenv()
             cred_dict = get_firebase_secret()
-            
-            BUCKET_NAME = os.getenv("STORAGE_BUCKET", "services-e42af.firebasestorage.app")
+            BUCKET_NAME = "services-e42af.firebasestorage.app"
             
             # 기존 앱이 있으면 삭제하고 새로 초기화
             if firebase_admin._apps:

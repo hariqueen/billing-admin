@@ -121,6 +121,57 @@ def health_check():
         }
     })
 
+@app.route('/api/auth/login', methods=['POST'])
+def admin_login():
+    """관리자 로그인"""
+    try:
+        data = request.get_json() or {}
+        employee_id = str(data.get('employeeId', '')).strip()
+        password = str(data.get('password', ''))
+
+        if not employee_id or not password:
+            return jsonify({"error": "사번과 비밀번호를 입력해주세요."}), 400
+
+        user = db_manager.authenticate_admin_user(employee_id, password)
+        if not user:
+            return jsonify({"error": "사번 또는 비밀번호가 올바르지 않습니다."}), 401
+
+        return jsonify({"success": True, "user": user})
+    except Exception as e:
+        print(f"관리자 로그인 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin-users/<employee_id>', methods=['PUT'])
+def update_admin_user(employee_id):
+    """관리자 계정의 직급/비밀번호 수정"""
+    try:
+        data = request.get_json() or {}
+        position = data.get('position')
+        password = data.get('password')
+
+        updates = {}
+        if position is not None:
+            updates['position'] = str(position).strip()
+        if password is not None:
+            updates['password'] = str(password)
+
+        if not updates:
+            return jsonify({"error": "수정할 값이 없습니다."}), 400
+        if 'password' in updates and len(updates['password']) < 4:
+            return jsonify({"error": "비밀번호는 4자 이상이어야 합니다."}), 400
+        if 'position' in updates and not updates['position']:
+            return jsonify({"error": "직급은 비워둘 수 없습니다."}), 400
+
+        updated_user = db_manager.update_admin_user(
+            employee_id,
+            position=updates.get('position'),
+            password=updates.get('password')
+        )
+        return jsonify({"success": True, "user": updated_user})
+    except Exception as e:
+        print(f"관리자 계정 수정 오류: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/collect-data', methods=['POST'])
 def collect_data():
     """실제 데이터 수집"""

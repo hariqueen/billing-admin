@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Menu, X, FileText, Receipt, CreditCard, Settings, LogOut } from 'lucide-react';
+import { Menu, X, FileText, Receipt, CreditCard, Settings, User, LogOut } from 'lucide-react';
 import BillingAutomationAdmin from './components/BillingAutomationAdmin';
 import TaxInvoicePage from './components/TaxInvoicePage';
 import AutoExpensePage from './components/AutoExpensePage';
 import AccountManager from './components/AccountManager';
 import LoginForm from './components/LoginForm';
+import UserProfileManager from './components/UserProfileManager';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -13,7 +14,7 @@ function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const [currentPage, setCurrentPage] = useState('billing'); // 'billing', 'tax-invoice', 'auto-expense'
+  const [currentPage, setCurrentPage] = useState('billing'); // 'billing', 'tax-invoice', 'auto-expense', 'profile'
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showAccountManager, setShowAccountManager] = useState(false);
 
@@ -21,6 +22,11 @@ function App() {
     // 로그인 시 localStorage에 사용자 정보 저장
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
+  };
+
+  const handleUserUpdated = (updatedUser) => {
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    setUser(updatedUser);
   };
 
   const handleLogout = () => {
@@ -58,6 +64,14 @@ function App() {
         return <TaxInvoicePage onBack={() => setCurrentPage('billing')} user={user} />;
       case 'auto-expense':
         return <AutoExpensePage onBack={() => setCurrentPage('billing')} user={user} />;
+      case 'profile':
+        return (
+          <UserProfileManager
+            user={user}
+            onBack={() => setCurrentPage('billing')}
+            onUserUpdated={handleUserUpdated}
+          />
+        );
       default:
         return (
           <BillingAutomationAdmin 
@@ -145,6 +159,18 @@ function App() {
             </button>
             
             <button
+              onClick={() => handlePageChange('profile')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                currentPage === 'profile'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <User className="w-5 h-5" />
+              내 계정
+            </button>
+
+            <button
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
             >
@@ -224,6 +250,18 @@ function App() {
               계정 관리
             </button>
             
+            <button
+              onClick={() => handlePageChange('profile')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                currentPage === 'profile'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <User className="w-5 h-5" />
+              내 계정
+            </button>
+
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"

@@ -7,14 +7,14 @@
 .env.*
 *.pem
 *.key
-*-firebase-adminsdk-*.json
-firebase-credentials.json
+
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 .Python
+.venv/
 venv/
 ENV/
 env/
