@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Download, Upload, Play, Loader2, RotateCcw } from 'lucide-react';
 
 // API URL을 환경에 따라 자동으로 선택
@@ -50,6 +50,14 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     companyName: '',
     licenseCount: 40
   });
+
+  const [errorPopup, setErrorPopup] = useState({
+    isOpen: false,
+    companyName: '',
+    taskId: '',
+    messages: []
+  });
+  const shownErrorTaskIdsRef = useRef(new Set());
 
 
 
@@ -306,10 +314,45 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   };
 
   const pollTaskStatus = async (taskId, companyName) => {
+    const extractTaskErrors = (status) => {
+      const messages = [];
+
+      if (status?.error) {
+        messages.push(String(status.error));
+      }
+
+      if (Array.isArray(status?.log)) {
+        status.log.forEach((entry) => {
+          if (typeof entry !== 'string') return;
+          if (
+            entry.includes('❌') ||
+            entry.includes('로그인 실패') ||
+            entry.includes('수집 중 오류') ||
+            entry.includes('심각한 오류')
+          ) {
+            messages.push(entry);
+          }
+        });
+      }
+
+      return Array.from(new Set(messages)).slice(-5);
+    };
+
     const checkStatus = async () => {
       try {
         const response = await fetch(`${API_URL}/api/task-status/${taskId}`);
         const status = await response.json();
+        const errorMessages = extractTaskErrors(status);
+
+        if (errorMessages.length > 0 && !shownErrorTaskIdsRef.current.has(taskId)) {
+          shownErrorTaskIdsRef.current.add(taskId);
+          setErrorPopup({
+            isOpen: true,
+            companyName,
+            taskId,
+            messages: errorMessages
+          });
+        }
 
         if (status.status === 'completed') {
           console.log(`수집 완료 - ${companyName}:`, status);
@@ -359,6 +402,15 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           }
         } else if (status.status === 'failed') {
           console.error('작업 실패:', status.error);
+          if (!shownErrorTaskIdsRef.current.has(taskId)) {
+            shownErrorTaskIdsRef.current.add(taskId);
+            setErrorPopup({
+              isOpen: true,
+              companyName,
+              taskId,
+              messages: errorMessages.length > 0 ? errorMessages : ['작업이 실패했습니다. 백엔드 로그를 확인해주세요.']
+            });
+          }
           setCompanies(prev => prev.map(company => 
             company.name === companyName 
               ? { ...company, collecting: false }
@@ -516,6 +568,10 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
 
   const closeLicensePopup = () => {
     setLicensePopup({ isOpen: false, companyName: '', licenseCount: 40 });
+  };
+
+  const closeErrorPopup = () => {
+    setErrorPopup({ isOpen: false, companyName: '', taskId: '', messages: [] });
   };
 
   const handleLicenseConfirm = async () => {
@@ -1220,6 +1276,46 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                 <button
                   onClick={handleLicenseConfirm}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 수집 오류 안내 팝업 */}
+        {errorPopup.isOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+            <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-red-700">
+                  {errorPopup.companyName} 수집 오류
+                </h3>
+                <button
+                  onClick={closeErrorPopup}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mb-3 text-sm text-gray-600">
+                작업 ID: {errorPopup.taskId}
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {errorPopup.messages.map((message, idx) => (
+                  <div key={idx} className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
+                    {message}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 text-right">
+                <button
+                  onClick={closeErrorPopup}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                 >
                   확인
                 </button>

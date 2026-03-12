@@ -2,7 +2,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
 import time
 import os
 from backend.data_collection.config import ElementConfig, DateConfig
@@ -48,25 +47,115 @@ class DataManager:
                         continue
                     else:
                         raise e
+
+        def _safe_text(css_selector):
+            try:
+                return driver.find_element(By.CSS_SELECTOR, css_selector).text.strip()
+            except Exception:
+                return ""
+
+        def _safe_attr(css_selector, attr_name):
+            try:
+                return driver.find_element(By.CSS_SELECTOR, css_selector).get_attribute(attr_name) or ""
+            except Exception:
+                return ""
+
+        def _debug_active_element(stage):
+            try:
+                active_id = driver.execute_script("return (document.activeElement && document.activeElement.id) || '';")
+                active_name = driver.execute_script("return (document.activeElement && document.activeElement.name) || '';")
+                print(f"[CALL-DEBUG] {stage} | activeElement: id='{active_id}', name='{active_name}'")
+            except Exception as debug_error:
+                print(f"[CALL-DEBUG] {stage} | activeElement 확인 실패: {str(debug_error)[:120]}")
+
+        def _debug_tagfield(stage, selected_text_selector, hidden_input_selector):
+            selected_text = _safe_text(selected_text_selector)
+            hidden_value = _safe_attr(hidden_input_selector, "value")
+            print(f"[CALL-DEBUG] {stage} | selectedText='{selected_text}' | hiddenValue='{hidden_value}'")
+
+        def _select_tagfield_option(trigger_selector, hidden_input_selector, target_labels, field_name, max_retries=3):
+            """TagField 드롭다운에서 텍스트 항목을 직접 클릭해 선택한다."""
+            if isinstance(target_labels, str):
+                target_labels = [target_labels]
+
+            for attempt in range(max_retries):
+                try:
+                    # 트리거(화살표) 우선 클릭, 실패 시 입력 필드 클릭
+                    try:
+                        trigger = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, trigger_selector)))
+                        driver.execute_script("arguments[0].click();", trigger)
+                    except Exception:
+                        input_selector = trigger_selector.replace("-trigger-picker", "-inputEl")
+                        input_el = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, input_selector)))
+                        driver.execute_script("arguments[0].click();", input_el)
+
+                    time.sleep(0.3)
+
+                    # 드롭다운 옵션 텍스트 클릭 (ExtJS boundlist/일반 항목 모두 대응)
+                    option_clicked = False
+                    for label in target_labels:
+                        option_xpath = (
+                            f"//*[contains(@class,'x-boundlist-item') and normalize-space(.)='{label}']"
+                            f" | //*[contains(@class,'x-boundlist-item') and contains(normalize-space(.), '{label}')]"
+                            f" | //div[contains(@class,'x-boundlist-item') and normalize-space(.)='{label}']"
+                            f" | //li[contains(@class,'x-boundlist-item') and normalize-space(.)='{label}']"
+                        )
+                        options = driver.find_elements(By.XPATH, option_xpath)
+                        for opt in options:
+                            if opt.is_displayed():
+                                driver.execute_script("arguments[0].click();", opt)
+                                option_clicked = True
+                                break
+                        if option_clicked:
+                            break
+
+                    time.sleep(0.4)
+                    selected_value = _safe_attr(hidden_input_selector, "value")
+                    if option_clicked and selected_value:
+                        print(f"[CALL-DEBUG] {field_name} 선택 성공 | value='{selected_value}'")
+                        return True
+
+                    print(
+                        f"[CALL-DEBUG] {field_name} 선택 재시도({attempt + 1}/{max_retries}) | "
+                        f"option_clicked={option_clicked}, value='{selected_value}'"
+                    )
+                    driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+                    time.sleep(0.2)
+                except Exception as select_error:
+                    print(
+                        f"[CALL-DEBUG] {field_name} 선택 중 예외({attempt + 1}/{max_retries}): "
+                        f"{str(select_error)[:120]}"
+                    )
+                    time.sleep(0.3)
+
+            raise Exception(f"{field_name} 선택 실패: target_labels={target_labels}")
         
         try:
-            # 회사 선택
-            company_text = config.get('company_text', company_name)
-            retry_click(f"//span[contains(text(), '{company_text}')]", "xpath")
-            time.sleep(1)
-            
-            # 콜데이터 선택
+            # 콜데이터 선택 (회사 선택 단계 제거됨)
             retry_click("//span[contains(text(), '콜데이터')]", "xpath")
             time.sleep(1)
+            _debug_active_element("콜데이터 클릭 후")
             
             # 아웃바운드 설정
             outbound_selector = config.get('outbound_selector', "#uxtagfield-2171-inputEl")
             retry_click(outbound_selector)
             time.sleep(0.3)
             
-            # 아웃바운드 값 선택
-            element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, outbound_selector)))
-            element.send_keys(Keys.ARROW_DOWN, Keys.ENTER)
+            # 아웃바운드 값 선택 (텍스트 직접 클릭)
+            call_type_labels = config.get('call_type_labels', ['아웃바운드', 'Outbound'])
+            _select_tagfield_option(
+                "#uxtagfield-2171-trigger-picker",
+                "#uxtagfield-2171-hiddenDataEl input[name='call_type']",
+                call_type_labels,
+                "호타입"
+            )
+            time.sleep(0.4)
+            _debug_tagfield(
+                "호타입 선택 후",
+                "#uxtagfield-2171-selectedText",
+                "#uxtagfield-2171-hiddenDataEl input[name='call_type']"
+            )
+            _debug_active_element("호타입 선택 후")
             
             # 호상태 설정
             call_status_selector = config.get('call_status_selector', "#uxtagfield-2172-inputEl")
@@ -137,14 +226,21 @@ class DataManager:
                 """, call_status_element)
                 time.sleep(0.5)
             
-            # 호상태 값 선택
-            element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, call_status_selector)))
-            actions = ActionChains(driver)
-            for _ in range(17):
-                actions.send_keys(Keys.ARROW_DOWN).perform()
-                time.sleep(0.05)
-            actions.send_keys(Keys.ENTER).perform()
+            # 호상태 값 선택 (텍스트 직접 클릭)
+            call_status_labels = config.get('call_status_labels', ['통화성공', 'Connect'])
+            _select_tagfield_option(
+                "#uxtagfield-2172-trigger-picker",
+                "#uxtagfield-2172-hiddenDataEl input[name='state']",
+                call_status_labels,
+                "호상태"
+            )
             time.sleep(0.5)
+            _debug_tagfield(
+                "호상태 선택 후",
+                "#uxtagfield-2172-selectedText",
+                "#uxtagfield-2172-hiddenDataEl input[name='state']"
+            )
+            _debug_active_element("호상태 선택 후")
             
             # 날짜 설정 (헤드리스 최적화 - JavaScript 우선)
             if start_date and end_date:
@@ -168,6 +264,18 @@ class DataManager:
                         }
                     """, start_selector, end_selector, start_date, end_date)
                     time.sleep(1)
+                    start_value = driver.execute_script(
+                        "var el = document.querySelector(arguments[0]); return el ? el.value : '';",
+                        start_selector
+                    )
+                    end_value = driver.execute_script(
+                        "var el = document.querySelector(arguments[0]); return el ? el.value : '';",
+                        end_selector
+                    )
+                    print(
+                        f"[CALL-DEBUG] 날짜 설정 후 | start='{start_value}', end='{end_value}', "
+                        f"requested_start='{start_date}', requested_end='{end_date}'"
+                    )
                 except Exception as js_error:
                     # JavaScript 실패 시 Selenium 방식으로 fallback
                     print(f"⚠️ {company_name} - JavaScript 날짜 설정 실패, Selenium 방식으로 재시도...")
@@ -180,6 +288,12 @@ class DataManager:
                             end_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['end_date_selector'])))
                             end_input.clear()
                             end_input.send_keys(end_date)
+                        start_value = _safe_attr(config['start_date_selector'], "value")
+                        end_value = _safe_attr(config['end_date_selector'], "value")
+                        print(
+                            f"[CALL-DEBUG] 날짜(Fallback) 설정 후 | start='{start_value}', end='{end_value}', "
+                            f"requested_start='{start_date}', requested_end='{end_date}'"
+                        )
                     except Exception as date_error:
                         print(f"❌ {company_name} - 날짜 설정 실패: {str(date_error)[:100]}")
                         import traceback
@@ -207,6 +321,10 @@ class DataManager:
             
             # 다운로드 시도 (JavaScript 방식으로 변경)
             if download:
+                download_dir = "/app/downloads"
+                os.makedirs(download_dir, exist_ok=True)
+                before_files = set(os.listdir(download_dir)) if os.path.exists(download_dir) else set()
+                print(f"[CALL-DEBUG] 다운로드 전 파일 수: {len(before_files)}")
                 try:
                     download_btn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, config['download_btn_selector'])))
                     driver.execute_script("""
@@ -231,6 +349,7 @@ class DataManager:
                     alert = wait.until(
                         EC.visibility_of_element_located((By.CSS_SELECTOR, config['no_data_alert_selector']))
                     )
+                    print(f"[CALL-DEBUG] 데이터없음 알림 감지: '{alert.text.strip()}'")
                     if config['no_data_text'] in alert.text:
                         print("검색된 데이터가 없습니다. 다음 단계로 진행.")
                         return True
@@ -243,9 +362,10 @@ class DataManager:
                 
                 # 다운로드 완료 후 파일 확인 (Docker 환경 대응)
                 try:
-                    download_dir = "/app/downloads"
-                    os.makedirs(download_dir, exist_ok=True)
-                    excel_files = [f for f in os.listdir(download_dir) if f.endswith(('.xlsx', '.xls'))] if os.path.exists(download_dir) else []
+                    after_files = set(os.listdir(download_dir)) if os.path.exists(download_dir) else set()
+                    new_files = sorted(list(after_files - before_files))
+                    excel_files = [f for f in after_files if f.endswith(('.xlsx', '.xls'))] if os.path.exists(download_dir) else []
+                    print(f"[CALL-DEBUG] 다운로드 후 파일 수: {len(after_files)} | 신규 파일: {new_files}")
                     if excel_files:
                         latest_file = max(excel_files, key=lambda x: os.path.getctime(os.path.join(download_dir, x)))
                         print(f"다운로드 완료: {latest_file}")

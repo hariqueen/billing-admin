@@ -104,6 +104,44 @@ class LoginManager:
             login_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['login_btn'])))
             login_button.click()
             time.sleep(2)  # 로그인 처리 대기
+
+            def _has_visible_element(selector, selector_type="css"):
+                try:
+                    if selector_type == "xpath":
+                        elements = driver.find_elements(By.XPATH, selector)
+                    else:
+                        elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    return any(elem.is_displayed() for elem in elements)
+                except Exception:
+                    return False
+
+            def _has_any_success_signal():
+                # 계정 유형별 로그인 성공 시그널
+                success_css_selectors = []
+                success_xpath_selectors = []
+
+                if account_type == "sms":
+                    success_css_selectors.extend([
+                        config.get("sms_service_selector"),
+                        config.get("sms_menu_selector"),
+                        "#sidebar"
+                    ])
+                elif account_type == "call":
+                    success_css_selectors.extend([
+                        config.get("outbound_selector"),
+                        config.get("call_status_selector")
+                    ])
+                    success_xpath_selectors.append("//span[contains(text(), '콜데이터')]")
+
+                for css_selector in success_css_selectors:
+                    if css_selector and _has_visible_element(css_selector, "css"):
+                        return True
+
+                for xpath_selector in success_xpath_selectors:
+                    if xpath_selector and _has_visible_element(xpath_selector, "xpath"):
+                        return True
+
+                return False
             
             # 로그인 직후 알림창 처리
             try:
@@ -116,6 +154,25 @@ class LoginManager:
             except:
                 print("로그인 후 알림창 없음")  # 알림창이 없는 경우 (정상적인 상황)
                 pass
+
+            # 로그인 성공 검증:
+            # 메타허브는 로그인 실패 시 팝업 없이 로그인 화면에 그대로 머무를 수 있으므로
+            # 화면 전환(성공 시그널) 또는 로그인 폼 비노출 여부를 반드시 확인한다.
+            try:
+                WebDriverWait(driver, 8).until(
+                    lambda d: _has_any_success_signal() or not _has_visible_element(config['id_selector'], "css")
+                )
+            except Exception:
+                pass
+
+            login_form_still_visible = _has_visible_element(config['id_selector'], "css")
+            if login_form_still_visible and not _has_any_success_signal():
+                print(f"❌ {company_name} ({account_type.upper()}) 로그인 실패: 로그인 화면에서 이동하지 않음 (아이디/비밀번호 확인 필요)")
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                return False, None
             
             if keep_session:
                 print(f"{company_name} ({account_type.upper()}) 로그인 성공 (세션 유지)")
