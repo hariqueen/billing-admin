@@ -280,6 +280,7 @@ def collect_data():
                         import traceback
                         print(traceback.format_exc())
                         task_status[task_id]["log"].append(f"❌ SMS 크롤링 중 예외: {str(crawl_error)}")
+                        task_status[task_id]["error"] = str(crawl_error)
                         sms_result = False
                     
                     # SMS 수집 직후 다운로드된 파일 찾기
@@ -400,6 +401,8 @@ def collect_data():
                     print(f"   상세 스택 트레이스:")
                     print(error_traceback)
                     task_status[task_id]["log"].append(f"❌ {company_name} SMS 수집 중 오류: {error_detail}")
+                    # 수집 단계의 구체 오류를 남겨 최종 실패 메시지에서 우선 사용
+                    task_status[task_id]["error"] = error_detail
                 
                 # 2단계: 앤하우스인 경우 CALL 데이터도 수집
                 if company_name == "앤하우스":
@@ -499,10 +502,16 @@ def collect_data():
                     task_status[task_id]["log"].append("✅ 데이터 수집 완료!")
                     print(f"✅ {company_name} 크롤링 완료 - 파일: {len(task_status[task_id]['files'])}개")
                 else:
-                    task_status[task_id]["status"] = "completed"
+                    # 파일이 하나도 없으면 성공으로 보지 않고 실패 처리
+                    task_status[task_id]["status"] = "failed"
                     task_status[task_id]["progress"] = 100
-                    task_status[task_id]["log"].append("⚠️ 수집된 파일이 없습니다 (데이터 없음 또는 오류)")
-                    print(f"⚠️ {company_name} 크롤링 완료 - 하지만 파일이 없음 (오류 가능성)")
+                    existing_error = task_status[task_id].get("error")
+                    if existing_error:
+                        task_status[task_id]["error"] = existing_error
+                    else:
+                        task_status[task_id]["error"] = "수집 결과 파일이 없습니다. 기간 조건 또는 사이트 데이터를 확인해주세요."
+                    task_status[task_id]["log"].append("❌ 수집된 파일이 없습니다 (데이터 없음 또는 오류)")
+                    print(f"❌ {company_name} 크롤링 실패 처리 - 파일이 없음")
                 
             except Exception as e:
                 task_status[task_id]["status"] = "failed"

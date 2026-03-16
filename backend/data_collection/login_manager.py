@@ -173,6 +173,41 @@ class LoginManager:
                 except Exception:
                     pass
                 return False, None
+
+            # 로그인 URL 잔류 검증 (Meta ICS 계열)
+            try:
+                current_url = driver.current_url
+            except Exception:
+                current_url = ""
+            if "login.jsp" in current_url:
+                print(f"❌ {company_name} ({account_type.upper()}) 로그인 검증 실패: 로그인 페이지에 머무름 ({current_url})")
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                return False, None
+
+            # 구쁘 전용 로그인 검증
+            if company_name == "구쁘":
+                current_url_lower = current_url.lower()
+                still_login_url = any(token in current_url_lower for token in ["/login", "login/form", "/signin", "/auth/login"])
+                login_btn_selector = config.get('login_btn', '#loginBtn')
+                login_btn_still_visible = False
+                try:
+                    login_btn_still_visible = len(driver.find_elements(By.CSS_SELECTOR, login_btn_selector)) > 0
+                except Exception:
+                    login_btn_still_visible = False
+
+                if still_login_url or login_btn_still_visible:
+                    print(
+                        f"❌ {company_name} ({account_type.upper()}) 로그인 검증 실패: "
+                        f"still_login_url={still_login_url}, login_btn_visible={login_btn_still_visible}, url={current_url}"
+                    )
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+                    return False, None
             
             if keep_session:
                 print(f"{company_name} ({account_type.upper()}) 로그인 성공 (세션 유지)")

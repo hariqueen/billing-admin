@@ -691,41 +691,115 @@ class DataManager:
         if 'sms_service_selector' not in config:
             print(f"{company_name}는 SMS 기능이 없습니다")
             return False
+
+        debug_prefix = f"[SMS-DEBUG][{company_name}]"
+
+        def debug_snapshot(stage):
+            """현재 페이지/프레임/팝업 상태 스냅샷"""
+            try:
+                current_url = driver.current_url
+            except Exception as e:
+                current_url = f"조회실패: {e}"
+
+            try:
+                page_title = driver.title
+            except Exception as e:
+                page_title = f"조회실패: {e}"
+
+            try:
+                iframe_count = len(driver.find_elements(By.TAG_NAME, "iframe"))
+            except Exception as e:
+                iframe_count = f"조회실패: {e}"
+
+            try:
+                ready_state = driver.execute_script("return document.readyState")
+            except Exception as e:
+                ready_state = f"조회실패: {e}"
+
+            alert_text = None
+            try:
+                alert = driver.switch_to.alert
+                alert_text = alert.text
+            except Exception:
+                pass
+
+            print(f"{debug_prefix} {stage}")
+            print(f"{debug_prefix} URL={current_url}")
+            print(f"{debug_prefix} TITLE={page_title}")
+            print(f"{debug_prefix} READY_STATE={ready_state}, IFRAMES={iframe_count}")
+            if alert_text:
+                print(f"{debug_prefix} JS Alert 감지: {alert_text}")
+
+            try:
+                menu_nodes = driver.find_elements(By.CSS_SELECTOR, "span[id^='aside-menu-']")
+                menu_texts = [node.text.strip() for node in menu_nodes if node.text and node.text.strip()]
+                if menu_texts:
+                    print(f"{debug_prefix} 메뉴 텍스트 샘플(최대10): {', '.join(menu_texts[:10])}")
+            except Exception:
+                pass
+
+        def click_with_debug(by, selector, step_name, timeout=ElementConfig.WAIT['default']):
+            """selector 클릭 + 실패 시 상세 디버깅"""
+            try:
+                print(f"{debug_prefix} {step_name} 시도: by={by}, selector={selector}")
+                element = WebDriverWait(driver, timeout).until(
+                    EC.element_to_be_clickable((by, selector))
+                )
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+                time.sleep(0.3)
+                element.click()
+                print(f"{debug_prefix} {step_name} 성공")
+                return True
+            except Exception as e:
+                print(f"{debug_prefix} {step_name} 실패: {e}")
+                debug_snapshot(f"{step_name} 실패 직후 스냅샷")
+                return False
         
         def click_menu_chain():
             """메뉴 클릭 체인"""
             try:
+                debug_snapshot("메뉴 클릭 체인 시작")
+
                 # 구쁘 전용 처리
                 if config.get('is_guppu'):
                     # 메뉴 버튼 클릭
-                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_service_selector']))).click()
+                    if not click_with_debug(By.CSS_SELECTOR, config['sms_service_selector'], "구쁘 메뉴 버튼 클릭"):
+                        return False
                     time.sleep(1)
                     
                     # SMS 버튼 클릭
-                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_menu_selector']))).click()
+                    if not click_with_debug(By.CSS_SELECTOR, config['sms_menu_selector'], "구쁘 SMS 버튼 클릭"):
+                        return False
                     time.sleep(1)
                     
                     # 문자발송이력 버튼 클릭
-                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_history_selector']))).click()
+                    if not click_with_debug(By.CSS_SELECTOR, config['sms_history_selector'], "구쁘 문자발송이력 클릭"):
+                        return False
                     time.sleep(2)
+                    debug_snapshot("구쁘 메뉴 클릭 체인 완료")
                     return True
                 
                 # 기존 로직 (다른 회사들)
                 # 메뉴 클릭 (볼드워크 등 새 어드민)
                 if config.get('need_menu_click'):
-                    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['menu_selector']))).click()
+                    if not click_with_debug(By.CSS_SELECTOR, config['menu_selector'], "공통 상위 메뉴 클릭"):
+                        return False
                     time.sleep(ElementConfig.WAIT['short'])
                 
                 # 문자서비스 클릭
-                wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_service_selector']))).click()
+                if not click_with_debug(By.CSS_SELECTOR, config['sms_service_selector'], "문자서비스 클릭"):
+                    return False
                 time.sleep(ElementConfig.WAIT['short'])
                 
                 # 문자발송이력 클릭
-                wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, config['sms_history_selector']))).click()
+                if not click_with_debug(By.CSS_SELECTOR, config['sms_history_selector'], "문자발송이력 클릭"):
+                    return False
                 time.sleep(ElementConfig.WAIT['short'])
+                debug_snapshot("메뉴 클릭 체인 완료")
                 return True
             except Exception as e:
                 print(f"메뉴 클릭 실패: {e}")
+                debug_snapshot("메뉴 클릭 체인 예외")
                 return False
         
         # 최초 메뉴 클릭
@@ -736,14 +810,20 @@ class DataManager:
         if config.get('has_brands'):
             # 브랜드 선택 팝업 닫기
             iframes = driver.find_elements(By.TAG_NAME, "iframe")
+            print(f"{debug_prefix} 브랜드 팝업 전 iframe 개수: {len(iframes)}")
             if len(iframes) > ElementConfig.IFRAME['brand_popup_index']:
                 driver.switch_to.frame(iframes[ElementConfig.IFRAME['brand_popup_index']])
                 try:
                     driver.find_element(By.CSS_SELECTOR, ElementConfig.COMMON['alert_ok']).click()
-                    pass
+                    print(f"{debug_prefix} 브랜드 팝업 확인 버튼 클릭 성공")
                 except Exception as e:
-                    pass
+                    print(f"{debug_prefix} 브랜드 팝업 확인 버튼 없음/실패: {str(e)[:150]}")
                 driver.switch_to.default_content()
+            else:
+                print(
+                    f"{debug_prefix} 브랜드 팝업 iframe 인덱스 부족: "
+                    f"need>{ElementConfig.IFRAME['brand_popup_index']}, has={len(iframes)}"
+                )
 
             # 각 브랜드별로 처리
             for brand_index, brand in enumerate(config['brands']):
@@ -853,12 +933,15 @@ class DataManager:
                                         continue
                                 
                                 if autocomplete_item:
+                                    print(f"{debug_prefix} 브랜드 자동완성 선택자 매칭: {selector}")
                                     autocomplete_item.click()
                                     time.sleep(1)
                                 else:
+                                    print(f"{debug_prefix} 브랜드 자동완성 항목 없음, ENTER로 대체")
                                     brand_input.send_keys(Keys.ENTER)
                                     time.sleep(1)
                             except Exception as ac_error:
+                                print(f"{debug_prefix} 브랜드 자동완성 클릭 실패, ENTER 대체: {str(ac_error)[:150]}")
                                 brand_input.send_keys(Keys.ENTER)
                                 time.sleep(1)
                         except Exception as e:
@@ -906,7 +989,14 @@ class DataManager:
         else:
             # 구쁘 전용 처리
             if config.get('is_guppu'):
-                return self._process_guppu_sms_data(driver, config, start_date, end_date)
+                try:
+                    guppu_result = self._process_guppu_sms_data(driver, config, start_date, end_date)
+                    if not guppu_result:
+                        raise RuntimeError("GUPPU_DOWNLOAD_FAIL: 구쁘 SMS 다운로드 실패")
+                    return True
+                except Exception as guppu_error:
+                    print(f"{debug_prefix} 구쁘 전용 처리 실패: {guppu_error}")
+                    raise
             
             # 기존 로직 (다른 회사들 - 앤하우스 포함)
             iframes = driver.find_elements(By.TAG_NAME, "iframe")
@@ -930,21 +1020,26 @@ class DataManager:
     
     def _process_guppu_sms_data(self, driver, config, start_date=None, end_date=None):
         """구쁘 전용 SMS 데이터 처리 (간소화된 버전)"""
+        debug_prefix = "[SMS-DEBUG][구쁘]"
         try:
             wait = WebDriverWait(driver, 15)
+            print(f"{debug_prefix} 구쁘 SMS 처리 시작")
             
             # iframe 전환 (간단하게)
-            print("SMS iframe 찾기...")
+            print(f"{debug_prefix} SMS iframe 찾기 시작")
             driver.switch_to.default_content()
             time.sleep(2)
             
             # iframe을 src로 찾기
-            iframe = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'iframe[src*="smsHistory"], iframe#frm-5605')))
+            iframe_selector = 'iframe[src*="smsHistory"], iframe#frm-5605'
+            iframe = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, iframe_selector)))
             driver.switch_to.frame(iframe)
+            print(f"{debug_prefix} iframe 전환 성공: selector={iframe_selector}")
             time.sleep(2)
             
             # 날짜 설정
             if start_date and end_date:
+                print(f"{debug_prefix} 날짜 설정 시작: {start_date} ~ {end_date}")
                 driver.execute_script(f"""
                     var startInput = document.querySelector('{config['start_date_selector']}');
                     var endInput = document.querySelector('{config['end_date_selector']}');
@@ -953,9 +1048,11 @@ class DataManager:
                     if (endInput) endInput.value = '{end_date}';
                     if (displayInput) displayInput.value = '{start_date} ~ {end_date}';
                 """)
+                print(f"{debug_prefix} 날짜 설정 완료")
                 time.sleep(1)
             
             # 조회 버튼 클릭
+            print(f"{debug_prefix} 조회 버튼 클릭 시도: {config['search_btn_selector']}")
             search_btn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, config['search_btn_selector'])))
             driver.execute_script("""
                 var btn = arguments[0];
@@ -963,13 +1060,16 @@ class DataManager:
                 document.querySelectorAll('.loading-mask, .loading-overlay, .ax-mask-body').forEach(function(el) { el.style.display = 'none'; });
                 btn.click();
             """, search_btn)
+            print(f"{debug_prefix} 조회 버튼 클릭 성공")
             time.sleep(3)
             
             download_dir = "/app/downloads"
             os.makedirs(download_dir, exist_ok=True)
             before_files = set(os.listdir(download_dir)) if os.path.exists(download_dir) else set()
+            print(f"{debug_prefix} 다운로드 전 파일 수: {len(before_files)}")
             
             # 다운로드 버튼 클릭
+            print(f"{debug_prefix} 다운로드 버튼 클릭 시도: {config['download_btn_selector']}")
             download_btn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, config['download_btn_selector'])))
             driver.execute_script("""
                 var btn = arguments[0];
@@ -977,20 +1077,20 @@ class DataManager:
                 document.querySelectorAll('.loading-mask, .loading-overlay, .ax-mask-body').forEach(function(el) { el.style.display = 'none'; });
                 btn.click();
             """, download_btn)
+            print(f"{debug_prefix} 다운로드 버튼 클릭 성공")
             time.sleep(5)
             
             after_files = set(os.listdir(download_dir))
             new_files = after_files - before_files
             
             if new_files:
-                print(f"엑셀 다운로드 완료: {list(new_files)}")
+                print(f"{debug_prefix} 엑셀 다운로드 완료: {list(new_files)}")
                 return True
             else:
-                print("다운로드된 파일을 찾을 수 없습니다")
-                return False
+                raise RuntimeError("GUPPU_DOWNLOAD_FAIL: 다운로드된 파일을 찾을 수 없습니다")
                 
         except Exception as e:
-            print(f"구쁘 SMS 데이터 처리 실패: {e}")
-            return False
+            print(f"{debug_prefix} 구쁘 SMS 데이터 처리 실패: {e}")
+            raise
         finally:
             driver.switch_to.default_content()
