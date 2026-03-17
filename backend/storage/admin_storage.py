@@ -8,8 +8,24 @@ class AdminStorage:
     """통합 어드민 데이터 저장소 (메모리 캐시 없음 - 항상 파일에서 읽기)"""
     
     def __init__(self, storage_file="admin_storage.json"):
-        self.storage_file = storage_file
-        self.lock_file = f"{storage_file}.lock"
+        # 기본 저장 위치를 temp_processing으로 고정해 Docker 볼륨에 영속 저장한다.
+        if storage_file == "admin_storage.json":
+            storage_dir = os.path.join(os.getcwd(), "temp_processing")
+            os.makedirs(storage_dir, exist_ok=True)
+            self.storage_file = os.path.join(storage_dir, storage_file)
+
+            # 기존 루트 파일이 있으면 1회 마이그레이션
+            legacy_file = os.path.join(os.getcwd(), "admin_storage.json")
+            if os.path.exists(legacy_file) and not os.path.exists(self.storage_file):
+                try:
+                    with open(legacy_file, "r", encoding="utf-8") as src, open(self.storage_file, "w", encoding="utf-8") as dst:
+                        dst.write(src.read())
+                    print(f"기존 저장소 마이그레이션 완료: {legacy_file} -> {self.storage_file}")
+                except Exception as migrate_error:
+                    print(f"기존 저장소 마이그레이션 실패: {migrate_error}")
+        else:
+            self.storage_file = storage_file
+        self.lock_file = f"{self.storage_file}.lock"
         # 메모리 캐시 제거 - 항상 파일에서 직접 읽어옴
         self.ensure_file_exists()
     
@@ -45,7 +61,12 @@ class AdminStorage:
                 "bill_amounts": {},
                 "processed_files": {},
                 "uploaded_files": {},
-                "collected_files": {}
+                "collected_files": {},
+                "wconcept_settings": {
+                    "license_count": 40,
+                    "license_cost": 80000,
+                    "updated_at": None
+                }
             }
             self.save_data_direct(default_data)
             print(f"기본 저장소 파일 생성: {self.storage_file}")
@@ -60,6 +81,19 @@ class AdminStorage:
                     needs_update = True
                 if "collected_files" not in data:
                     data["collected_files"] = {}
+                    needs_update = True
+                if "wconcept_settings" not in data:
+                    data["wconcept_settings"] = {
+                        "license_count": 40,
+                        "license_cost": 80000,
+                        "updated_at": None
+                    }
+                    needs_update = True
+                if "sk_settings" not in data:
+                    data["sk_settings"] = {
+                        "license_cost": 80000,
+                        "updated_at": None
+                    }
                     needs_update = True
                 
                 if needs_update:
@@ -76,7 +110,12 @@ class AdminStorage:
                 "bill_amounts": {},
                 "processed_files": {},
                 "uploaded_files": {},
-                "collected_files": {}
+                "collected_files": {},
+                "wconcept_settings": {
+                    "license_count": 40,
+                    "license_cost": 80000,
+                    "updated_at": None
+                }
             }
         
         try:
@@ -86,7 +125,12 @@ class AdminStorage:
                     "bill_amounts": {},
                     "processed_files": {},
                     "uploaded_files": {},
-                    "collected_files": {}
+                    "collected_files": {},
+                    "wconcept_settings": {
+                        "license_count": 40,
+                        "license_cost": 80000,
+                        "updated_at": None
+                    }
                 }
             
             with open(self.storage_file, 'r', encoding='utf-8') as f:
@@ -99,7 +143,12 @@ class AdminStorage:
                             "bill_amounts": {},
                             "processed_files": {},
                             "uploaded_files": {},
-                            "collected_files": {}
+                            "collected_files": {},
+                            "wconcept_settings": {
+                                "license_count": 40,
+                                "license_cost": 80000,
+                                "updated_at": None
+                            }
                         }
                     return json.loads(content)
                 finally:
@@ -118,7 +167,12 @@ class AdminStorage:
                 "bill_amounts": {},
                 "processed_files": {},
                 "uploaded_files": {},
-                "collected_files": {}
+                "collected_files": {},
+                "wconcept_settings": {
+                    "license_count": 40,
+                    "license_cost": 80000,
+                    "updated_at": None
+                }
             }
         except Exception as e:
             print(f"어드민 데이터 로드 실패: {e}")
@@ -126,7 +180,12 @@ class AdminStorage:
                 "bill_amounts": {},
                 "processed_files": {},
                 "uploaded_files": {},
-                "collected_files": {}
+                "collected_files": {},
+                "wconcept_settings": {
+                    "license_count": 40,
+                    "license_cost": 80000,
+                    "updated_at": None
+                }
             }
         finally:
             self._release_lock()
@@ -143,6 +202,17 @@ class AdminStorage:
                 data["uploaded_files"] = {}
             if "collected_files" not in data:
                 data["collected_files"] = {}
+            if "wconcept_settings" not in data:
+                data["wconcept_settings"] = {
+                    "license_count": 40,
+                    "license_cost": 80000,
+                    "updated_at": None
+                }
+            if "sk_settings" not in data:
+                data["sk_settings"] = {
+                    "license_cost": 80000,
+                    "updated_at": None
+                }
             
             # 임시 파일에 먼저 저장 (원자적 쓰기)
             temp_file = f"{self.storage_file}.tmp"
@@ -235,7 +305,16 @@ class AdminStorage:
             "bill_amounts": {},
             "processed_files": {},
             "uploaded_files": {},
-            "collected_files": {}
+            "collected_files": {},
+            "wconcept_settings": {
+                "license_count": 40,
+                "license_cost": 80000,
+                "updated_at": None
+            },
+            "sk_settings": {
+                "license_cost": 80000,
+                "updated_at": None
+            }
         }
         self.save_data_direct(default_data)
         print("admin_storage.json 전체 초기화 완료")
@@ -271,6 +350,60 @@ class AdminStorage:
         data["collected_files"][company_name] = collected_files
         self.save_data_direct(data)
         print(f"{company_name} 수집된 파일 목록 저장: {len(collected_files)}개")
+
+    # === W컨셉 라이선스 설정 관련 메서드 ===
+
+    def get_wconcept_settings(self):
+        """W컨셉 실행 팝업 기본값 조회"""
+        data = self.load_data()
+        settings = data.get("wconcept_settings", {})
+        return {
+            "license_count": int(settings.get("license_count", 40) or 40),
+            "license_cost": int(settings.get("license_cost", 80000) or 80000),
+            "updated_at": settings.get("updated_at")
+        }
+
+    def save_wconcept_settings(self, license_count=None, license_cost=None):
+        """W컨셉 실행 팝업 기본값 저장"""
+        data = self.load_data()
+        if "wconcept_settings" not in data:
+            data["wconcept_settings"] = {}
+
+        current = data["wconcept_settings"]
+        if license_count is not None:
+            current["license_count"] = int(license_count)
+        if license_cost is not None:
+            current["license_cost"] = int(license_cost)
+        current["updated_at"] = datetime.now().isoformat()
+
+        self.save_data_direct(data)
+        print(
+            f"W컨셉 설정 저장: license_count={current.get('license_count')}, "
+            f"license_cost={current.get('license_cost')}"
+        )
+
+    def get_sk_settings(self):
+        """SK일렉링크 실행 팝업 기본값 조회"""
+        data = self.load_data()
+        settings = data.get("sk_settings", {})
+        return {
+            "license_cost": int(settings.get("license_cost", 80000) or 80000),
+            "updated_at": settings.get("updated_at")
+        }
+
+    def save_sk_settings(self, license_cost=None):
+        """SK일렉링크 실행 팝업 기본값 저장"""
+        data = self.load_data()
+        if "sk_settings" not in data:
+            data["sk_settings"] = {}
+
+        current = data["sk_settings"]
+        if license_cost is not None:
+            current["license_cost"] = int(license_cost)
+        current["updated_at"] = datetime.now().isoformat()
+
+        self.save_data_direct(data)
+        print(f"SK일렉링크 설정 저장: license_cost={current.get('license_cost')}")
     
     # === 마이그레이션 메서드 ===
     

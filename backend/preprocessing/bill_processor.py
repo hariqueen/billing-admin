@@ -388,11 +388,11 @@ class BillProcessor:
             print(f"HTML PDF 변환 실패: {e}")
             return None
 
-    def process_wconcept(self, collection_date, license_count=40):
+    def process_wconcept(self, collection_date, license_count=40, license_cost=80000):
         """W컨셉 전처리 처리"""
         try:
             preprocessor = WconceptPreprocessor()
-            success = preprocessor.process_wconcept_data(collection_date, license_count)
+            success = preprocessor.process_wconcept_data(collection_date, license_count, license_cost)
             
             if success:
                 download_dir = os.path.join(os.getcwd(), "temp_processing")

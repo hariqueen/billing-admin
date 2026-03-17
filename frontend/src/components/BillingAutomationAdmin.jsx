@@ -48,7 +48,8 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   const [licensePopup, setLicensePopup] = useState({
     isOpen: false,
     companyName: '',
-    licenseCount: 40
+    licenseCount: 40,
+    licenseCost: 80000
   });
 
   const [errorPopup, setErrorPopup] = useState({
@@ -558,16 +559,77 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     setFilePopup({ isOpen: false, companyName: '', files: [] });
   };
 
-  const showLicensePopup = (companyName) => {
+  const handleRemoveUploadedFile = async (companyName, fileIndex, filename) => {
+    if (!window.confirm('이 파일을 목록에서 제거하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/remove-uploaded-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_name: companyName,
+          file_index: fileIndex,
+          filename
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error || '파일 제거에 실패했습니다.');
+        return;
+      }
+
+      if (Array.isArray(result.uploaded_files)) {
+        setCompanies(prev => prev.map(comp =>
+          comp.name === companyName
+            ? { ...comp, uploadedFiles: result.uploaded_files }
+            : comp
+        ));
+      }
+
+      setFilePopup(prev => ({
+        ...prev,
+        files: prev.files.map((file, idx) => (
+          idx === fileIndex ? { ...file, filename: null } : file
+        ))
+      }));
+    } catch (error) {
+      console.error('파일 제거 실패:', error);
+      alert('파일 제거 중 오류가 발생했습니다.');
+    }
+  };
+
+  const showLicensePopup = async (companyName) => {
     setLicensePopup({
       isOpen: true,
       companyName: companyName,
-      licenseCount: 40
+      licenseCount: 40,
+      licenseCost: 80000
     });
+
+    // 마지막 실행 설정 불러오기 (없으면 기본값 유지)
+    try {
+      const settingsApi = companyName === 'SK일렉링크'
+        ? `${API_URL}/api/sk-settings`
+        : `${API_URL}/api/wconcept-settings`;
+      const response = await fetch(settingsApi);
+      const result = await response.json();
+      if (response.ok) {
+        setLicensePopup(prev => ({
+          ...prev,
+          licenseCount: Number(result.license_count) || 40,
+          licenseCost: Number(result.license_cost) || 80000
+        }));
+      }
+    } catch (error) {
+      console.error(`${companyName} 기본 설정 조회 실패:`, error);
+    }
   };
 
   const closeLicensePopup = () => {
-    setLicensePopup({ isOpen: false, companyName: '', licenseCount: 40 });
+    setLicensePopup({ isOpen: false, companyName: '', licenseCount: 40, licenseCost: 80000 });
   };
 
   const closeErrorPopup = () => {
@@ -575,9 +637,13 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
   };
 
   const handleLicenseConfirm = async () => {
-    const { companyName, licenseCount } = licensePopup;
+    const { companyName, licenseCount, licenseCost } = licensePopup;
     closeLicensePopup();
-    await handleProcess(companyName, licenseCount);
+    if (companyName === 'SK일렉링크') {
+      await handleProcess(companyName, null, licenseCost);
+      return;
+    }
+    await handleProcess(companyName, licenseCount, licenseCost);
   };
 
   // W컨셉 전용 알림창 표시 (자동 사라짐)
@@ -654,6 +720,29 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     }
   };
 
+  // 실제 파일 기준으로 업로드 슬롯 동기화
+  const syncUploadedFiles = async (companyName) => {
+    try {
+      const response = await fetch(`${API_URL}/api/sync-uploaded-files`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_name: companyName })
+      });
+      const result = await response.json();
+      if (response.ok && Array.isArray(result.uploaded_files)) {
+        setCompanies(prev => prev.map(comp =>
+          comp.name === companyName
+            ? { ...comp, uploadedFiles: result.uploaded_files }
+            : comp
+        ));
+        return result.uploaded_files;
+      }
+    } catch (error) {
+      console.error('업로드 슬롯 동기화 실패:', error);
+    }
+    return null;
+  };
+
   const handleMultipleFileUpload = async (companyName, event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
@@ -662,9 +751,12 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     await clearProcessedFiles(companyName);
 
     const company = companies.find(c => c.name === companyName);
+    const syncedUploadedFiles = await syncUploadedFiles(companyName);
     
     try {
-      const uploadedFiles = [...company.uploadedFiles];
+      const uploadedFiles = Array.isArray(syncedUploadedFiles)
+        ? [...syncedUploadedFiles]
+        : [...company.uploadedFiles];
       let uploadIndex = 0;
       
       for (const file of files) {
@@ -733,8 +825,12 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
     event.target.value = '';
   };
 
-  const handleProcess = async (companyName, licenseCount = null) => {
+  const handleProcess = async (companyName, licenseCount = null, licenseCost = null) => {
     const company = companies.find(c => c.name === companyName);
+    const syncedUploadedFiles = await syncUploadedFiles(companyName);
+    const effectiveUploadedFiles = Array.isArray(syncedUploadedFiles)
+      ? syncedUploadedFiles
+      : company.uploadedFiles;
     
     // SK일렉링크와 W컨셉은 고지서 업로드 여부만 확인
     if (companyName === 'SK일렉링크' || companyName === 'W컨셉') {
@@ -744,7 +840,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       }
     } else {
       // 다른 회사들은 기존 로직 적용
-      const uploadedCount = company.uploadedFiles.filter(file => file).length;
+      const uploadedCount = effectiveUploadedFiles.filter(file => file).length;
       
       // 디싸이더스는 최소 2개 이상, 다른 회사는 필수 개수 모두 필요
       const minRequiredFiles = companyName === '디싸이더스/애드프로젝트' ? 2 : company.requiredFileCount;
@@ -771,6 +867,9 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
       // W컨셉인 경우 라이선스 수량 추가
       if (companyName === 'W컨셉' && licenseCount !== null) {
         requestBody.license_count = licenseCount;
+      }
+      if ((companyName === 'W컨셉' || companyName === 'SK일렉링크') && licenseCost !== null) {
+        requestBody.license_cost = licenseCost;
       }
 
       const response = await fetch(`${API_URL}/api/process-file`, {
@@ -1079,7 +1178,7 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                 {/* 전처리 영역 */}
                 <div className="col-span-2 flex justify-center">
                   <button
-                    onClick={() => company.name === 'W컨셉' ? showLicensePopup(company.name) : handleProcess(company.name)}
+                    onClick={() => (company.name === 'W컨셉' || company.name === 'SK일렉링크') ? showLicensePopup(company.name) : handleProcess(company.name)}
                     disabled={
                       company.processing || (
                         company.name === 'SK일렉링크' || company.name === 'W컨셉'
@@ -1204,12 +1303,22 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                       )}
                     </div>
                     {fileInfo.filename && (
-                      <button
-                        onClick={() => handleDownload(fileInfo.filename)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDownload(fileInfo.filename)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                          title="다운로드"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveUploadedFile(filePopup.companyName, index, fileInfo.filename)}
+                          className="text-red-600 hover:text-red-800 text-xs font-semibold"
+                          title="파일 제거"
+                        >
+                          X
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1227,13 +1336,13 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           </div>
         )}
 
-        {/* 라이선스 수량 입력 팝업 */}
+        {/* 라이선스 수량/비용 입력 팝업 */}
         {licensePopup.isOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {licensePopup.companyName} - 청구 라이선스 수량
+                  {licensePopup.companyName} - 청구 설정
                 </h3>
                 <button
                   onClick={closeLicensePopup}
@@ -1243,26 +1352,52 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
                 </button>
               </div>
               
+              {licensePopup.companyName === 'W컨셉' && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    청구 라이선스 수량을 입력해주세요
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={licensePopup.licenseCount}
+                      onChange={(e) => setLicensePopup(prev => ({
+                        ...prev,
+                        licenseCount: parseInt(e.target.value) || 40
+                      }))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="40"
+                    />
+                    <span className="text-gray-600">개</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    기본값: 40개 (필요에 따라 수정 가능)
+                  </p>
+                </div>
+              )}
+
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  청구 라이선스 수량을 입력해주세요
+                  라이선스 비용(원)을 입력해주세요
                 </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    min="1"
-                    value={licensePopup.licenseCount}
+                    min="0"
+                    step="100"
+                    value={licensePopup.licenseCost}
                     onChange={(e) => setLicensePopup(prev => ({
                       ...prev,
-                      licenseCount: parseInt(e.target.value) || 40
+                      licenseCost: parseInt(e.target.value, 10) || 0
                     }))}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="40"
+                    placeholder="80000"
                   />
-                  <span className="text-gray-600">개</span>
+                  <span className="text-gray-600">원</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  기본값: 40개 (필요에 따라 수정 가능)
+                  마지막 실행값이 기본으로 표시됩니다.
                 </p>
               </div>
               

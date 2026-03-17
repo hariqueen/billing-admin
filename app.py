@@ -547,6 +547,8 @@ def upload_file():
         file_index = request.form.get('file_index', '0')
         file_label = request.form.get('file_label', '')
         
+        kolon_input_dir = os.path.join("temp_processing", "kolon_inputs")
+
         # 자동업로드 모드 (파일이 없는 경우)
         if 'file' not in request.files:
             collected_filename = request.form.get('collected_filename')
@@ -567,7 +569,7 @@ def upload_file():
                     return jsonify({"error": f"파일 읽기 권한이 없습니다: {collected_filename}"}), 403
                 
                 # 임시 폴더 생성 (전처리 후 자동 삭제)
-                temp_dir = "temp_processing"
+                temp_dir = kolon_input_dir if company_name == "코오롱Fnc" else "temp_processing"
                 os.makedirs(temp_dir, exist_ok=True)
                 
                 # 파일명 생성 (슬래시 제거)
@@ -610,7 +612,7 @@ def upload_file():
             return jsonify({"error": "파일명이 없습니다"}), 400
         
         # 임시 폴더 생성 (전처리 후 자동 삭제)
-        temp_dir = "temp_processing"
+        temp_dir = kolon_input_dir if company_name == "코오롱Fnc" else "temp_processing"
         os.makedirs(temp_dir, exist_ok=True)
         
         # 파일 저장 (파일 인덱스와 라벨 포함, 슬래시 제거)
@@ -677,6 +679,7 @@ def download_file(filename):
         search_dirs = [
             "/app/downloads",  # 크롤링으로 다운로드된 파일
             "temp_processing",  # 전처리된 파일
+            os.path.join("temp_processing", "kolon_inputs"),  # 코오롱 업로드 원본
         ]
         
         # 각 디렉토리에서 파일 찾기
@@ -798,57 +801,71 @@ def process_file():
                 
         elif company_name == "코오롱Fnc":
             preprocessor = KolonPreprocessor()
-            success = preprocessor.process_kolon_data(collection_date)
+            uploaded_map = admin_storage.get_uploaded_files()
+            selected_filenames = uploaded_map.get(company_name, [])
+            success = preprocessor.process_kolon_data(
+                collection_date,
+                input_dir=os.path.join("temp_processing", "kolon_inputs"),
+                selected_filenames=selected_filenames
+            )
             
             if success:
-                # 다운로드 폴더에서 생성된 파일명 찾기
-                download_dir = "/app/downloads"
-                os.makedirs(download_dir, exist_ok=True)
+                # 코오롱 전처리 결과는 temp_processing에 생성되므로 두 경로를 모두 스캔한다.
+                search_dirs = ["/app/downloads", "temp_processing"]
                 processed_files = []
-                
-                if os.path.exists(download_dir):
-                    import time
-                    current_time = time.time()
-                    all_files = os.listdir(download_dir)
-                    
-                    # 코오롱 관련 3개 파일 찾기: 청구내역서, OpenAI 매칭결과, 코오롱FnC 상담솔루션 청구내역서
-                    processed_files = []
-                    
+
+                import time
+                current_time = time.time()
+
+                for search_dir in search_dirs:
+                    if not os.path.exists(search_dir):
+                        continue
+                    all_files = os.listdir(search_dir)
                     for filename in all_files:
                         if (("코오롱_청구내역서_" in filename and filename.endswith(".xlsx")) or
                             ("OpenAI_정확매칭결과_" in filename and filename.endswith(".csv")) or
                             ("코오롱FnC_상담솔루션 청구내역서" in filename and filename.endswith(".xlsx"))):
-                            file_path = os.path.join(download_dir, filename)
+                            file_path = os.path.join(search_dir, filename)
                             if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
                                 processed_files.append((filename, os.path.getctime(file_path)))
                     
-                    # 가장 최근 파일들 선택
-                    if processed_files:
-                        latest_files = sorted(processed_files, key=lambda x: x[1], reverse=True)
-                        processed_file_names = [f[0] for f in latest_files]
-                        
-                        # 결과 저장
-                        save_processed_files(company_name, processed_file_names)
-                        
-                        return jsonify({
-                            "message": "전처리 완료",
-                            "company": company_name,
-                            "processed_files": processed_file_names
-                        })
+                # 가장 최근 파일들 선택
+                if processed_files:
+                    # 동일 파일명 중복 제거 후 최신순 정렬
+                    latest_by_name = {}
+                    for fname, ctime in processed_files:
+                        if fname not in latest_by_name or ctime > latest_by_name[fname]:
+                            latest_by_name[fname] = ctime
+                    latest_files = sorted(latest_by_name.items(), key=lambda x: x[1], reverse=True)
+                    processed_file_names = [f[0] for f in latest_files]
+                    
+                    # 결과 저장
+                    save_processed_files(company_name, processed_file_names)
+                    
+                    return jsonify({
+                        "message": "전처리 완료",
+                        "company": company_name,
+                        "processed_files": processed_file_names
+                    })
                 
                 return jsonify({
                     "message": "전처리 완료",
                     "company": company_name,
-                    "processed_files": processed_files
+                    "processed_files": []
                 })
             else:
                 return jsonify({"error": "전처리 실패"}), 500
         
         elif company_name == "SK일렉링크":
             preprocessor = SKPreprocessor()
-            success = preprocessor.process_sk_data(collection_date)
+            license_cost = int(data.get('license_cost', 80000))
+            print(f"SK일렉링크 라이선스 비용: {license_cost:,}원")
+            success = preprocessor.process_sk_data(collection_date, license_cost=license_cost)
             
             if success:
+                # 다음 실행 시 기본값으로 보이도록 마지막 사용값 저장
+                admin_storage.save_sk_settings(license_cost=license_cost)
+
                 # 다운로드 폴더에서 생성된 파일명 찾기
                 download_dir = "/app/downloads"
                 os.makedirs(download_dir, exist_ok=True)
@@ -880,12 +897,20 @@ def process_file():
 
         elif company_name == "W컨셉":
             # W컨셉은 라이선스 수량이 필요
-            license_count = data.get('license_count', 40)
+            license_count = int(data.get('license_count', 40))
+            license_cost = int(data.get('license_cost', 80000))
             print(f"W컨셉 라이선스 수량: {license_count}개")
+            print(f"W컨셉 라이선스 비용: {license_cost:,}원")
             
-            processed_files = bill_processor.process_wconcept(collection_date, license_count)
+            processed_files = bill_processor.process_wconcept(collection_date, license_count, license_cost)
             
             if processed_files:
+                # 다음 실행 시 기본값으로 보이도록 마지막 사용값 저장
+                admin_storage.save_wconcept_settings(
+                    license_count=license_count,
+                    license_cost=license_cost
+                )
+
                 # 결과 저장
                 save_processed_files(company_name, processed_files)
                 
@@ -998,18 +1023,97 @@ def clear_processed_files(company_name):
     """특정 회사의 청구서 결과 초기화"""
     admin_storage.clear_processed_files(company_name)
 
+def sanitize_uploaded_files_for_company(company_name):
+    """실제 파일 존재 여부를 기준으로 업로드 슬롯 정리(없는 파일은 None 처리)"""
+    uploaded_files_map = admin_storage.get_uploaded_files()
+    company_files = uploaded_files_map.get(company_name, [])
+    if not isinstance(company_files, list):
+        company_files = []
+
+    search_dirs = [
+        "temp_processing",
+        os.path.join("temp_processing", "kolon_inputs"),
+        "/app/downloads",
+    ]
+
+    changed = False
+    sanitized_files = []
+
+    for filename in company_files:
+        if not filename:
+            sanitized_files.append(None)
+            continue
+
+        file_exists = False
+        for search_dir in search_dirs:
+            file_path = os.path.join(search_dir, filename)
+            if os.path.exists(file_path):
+                file_exists = True
+                break
+
+        if file_exists:
+            sanitized_files.append(filename)
+        else:
+            sanitized_files.append(None)
+            changed = True
+
+    if changed:
+        admin_storage.save_uploaded_files(company_name, sanitized_files)
+
+    return sanitized_files, changed
+
 @app.route('/api/get-processed-files', methods=['GET'])
 def get_processed_files():
     """저장된 청구서 결과 및 파일 목록 조회"""
     try:
         processed_files = admin_storage.get_processed_files()
         uploaded_files = admin_storage.get_uploaded_files()
+        for company_name in list(uploaded_files.keys()):
+            sanitized_files, changed = sanitize_uploaded_files_for_company(company_name)
+            if changed:
+                uploaded_files[company_name] = sanitized_files
         collected_files = admin_storage.get_collected_files()
         return jsonify({
             "processed_files": processed_files,
             "uploaded_files": uploaded_files,
             "collected_files": collected_files
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/sync-uploaded-files', methods=['POST'])
+def sync_uploaded_files():
+    """특정 회사 업로드 슬롯을 실파일 기준으로 동기화"""
+    try:
+        data = request.get_json()
+        company_name = data.get('company_name')
+        if not company_name:
+            return jsonify({"error": "회사명이 필요합니다"}), 400
+
+        uploaded_files, changed = sanitize_uploaded_files_for_company(company_name)
+        return jsonify({
+            "company_name": company_name,
+            "uploaded_files": uploaded_files,
+            "changed": changed
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/wconcept-settings', methods=['GET'])
+def get_wconcept_settings():
+    """W컨셉 실행 팝업 기본값 조회"""
+    try:
+        settings = admin_storage.get_wconcept_settings()
+        return jsonify(settings)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/sk-settings', methods=['GET'])
+def get_sk_settings():
+    """SK일렉링크 실행 팝업 기본값 조회"""
+    try:
+        settings = admin_storage.get_sk_settings()
+        return jsonify(settings)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1022,6 +1126,61 @@ def save_uploaded_files():
         uploaded_files = data.get('uploaded_files', [])
         admin_storage.save_uploaded_files(company_name, uploaded_files)
         return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/remove-uploaded-file', methods=['POST'])
+def remove_uploaded_file():
+    """업로드 슬롯 파일 제거 (목록 + 실제 파일)"""
+    try:
+        data = request.get_json()
+        company_name = data.get('company_name')
+        file_index = data.get('file_index')
+        filename = data.get('filename')
+
+        if company_name is None or file_index is None:
+            return jsonify({"error": "회사명과 파일 인덱스가 필요합니다"}), 400
+
+        try:
+            file_index = int(file_index)
+        except Exception:
+            return jsonify({"error": "파일 인덱스가 올바르지 않습니다"}), 400
+
+        uploaded_map = admin_storage.get_uploaded_files()
+        company_files = uploaded_map.get(company_name, [])
+        if not isinstance(company_files, list):
+            company_files = []
+
+        if file_index < 0 or file_index >= len(company_files):
+            return jsonify({"error": "파일 인덱스 범위를 벗어났습니다"}), 400
+
+        target_filename = filename or company_files[file_index]
+        company_files[file_index] = None
+        admin_storage.save_uploaded_files(company_name, company_files)
+
+        deleted = False
+        if target_filename:
+            search_dirs = [
+                "temp_processing",
+                os.path.join("temp_processing", "kolon_inputs"),
+                "/app/downloads",
+            ]
+            for search_dir in search_dirs:
+                file_path = os.path.join(search_dir, target_filename)
+                if os.path.exists(file_path) and os.path.isfile(file_path):
+                    try:
+                        os.remove(file_path)
+                        deleted = True
+                        break
+                    except Exception:
+                        pass
+
+        return jsonify({
+            "success": True,
+            "company_name": company_name,
+            "uploaded_files": company_files,
+            "deleted": deleted
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

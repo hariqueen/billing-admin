@@ -650,21 +650,30 @@ class KolonPreprocessor:
         except Exception as e:
             print(f"수식 참조 업데이트 오류: {e}")
 
-    def process_kolon_data(self, collection_date):
+    def process_kolon_data(self, collection_date, input_dir="temp_processing", selected_filenames=None):
         """코오롱 데이터 전처리 메인 함수"""
         try:
             print("코오롱 데이터 전처리 시작")
             
-            temp_dir = "temp_processing"
+            temp_dir = input_dir
             if not os.path.exists(temp_dir):
-                print("temp_processing 폴더를 찾을 수 없습니다")
+                print(f"입력 폴더를 찾을 수 없습니다: {temp_dir}")
                 return False
             
             kolon_files = []
-            for filename in os.listdir(temp_dir):
-                if "코오롱" in filename and filename.endswith((".xls", ".xlsx", ".csv")):
+            if selected_filenames:
+                # 프론트에 표시된 업로드 파일 목록을 우선 사용
+                for filename in selected_filenames:
+                    if not filename:
+                        continue
                     file_path = os.path.join(temp_dir, filename)
-                    kolon_files.append(file_path)
+                    if os.path.exists(file_path) and filename.endswith((".xls", ".xlsx", ".csv")):
+                        kolon_files.append(file_path)
+            else:
+                for filename in os.listdir(temp_dir):
+                    if "코오롱" in filename and filename.endswith((".xls", ".xlsx", ".csv")):
+                        file_path = os.path.join(temp_dir, filename)
+                        kolon_files.append(file_path)
             
             if len(kolon_files) != 2:
                 print(f"코오롱 파일이 2개 필요합니다. 현재: {len(kolon_files)}개")

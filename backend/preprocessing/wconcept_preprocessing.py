@@ -55,7 +55,7 @@ class WconceptPreprocessor:
             print(f"wconcept.xlsx 템플릿 다운로드 실패: {e}")
             return None
     
-    def update_wconcept_template(self, template_path, license_count, collection_date, bill_amount=None):
+    def update_wconcept_template(self, template_path, license_count, license_cost, collection_date, bill_amount=None):
         """wconcept.xlsx 템플릿 파일 업데이트 (W컨셉은 전달 청구서)"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -136,6 +136,9 @@ class WconceptPreprocessor:
                 # D5 셀에 라이선스 수량 입력 (숫자만)
                 detail_sheet.cell(row=5, column=4).value = license_count
                 print(f"세부내역 시트 D5 셀 업데이트: {license_count}개")
+                # C5 셀에 라이선스 단가 입력 (요청사항)
+                detail_sheet.cell(row=5, column=3).value = license_cost
+                print(f"세부내역 시트 C5 셀 업데이트: {license_cost:,}원")
                 
                 # E17 셀에 고지서 금액에서 부가세 10% 제외한 금액 입력
                 if bill_amount:
@@ -213,11 +216,12 @@ class WconceptPreprocessor:
         except Exception as e:
             print(f"수식 참조 업데이트 오류: {e}")
     
-    def process_wconcept_data(self, collection_date, license_count=40):
+    def process_wconcept_data(self, collection_date, license_count=40, license_cost=80000):
         """W컨셉 데이터 전처리 메인 함수"""
         try:
             print(" W컨셉 데이터 전처리 시작")
             print(f" 청구 라이선스 수량: {license_count}개")
+            print(f" 청구 라이선스 비용: {license_cost:,}원")
             
             # 고지서 금액 조회
             from ..storage.admin_storage import AdminStorage
@@ -237,7 +241,13 @@ class WconceptPreprocessor:
                 return False
             
             # 2. 템플릿 업데이트 및 청구서 생성 (고지서 금액 포함)
-            final_invoice_path = self.update_wconcept_template(template_path, license_count, collection_date, bill_amount)
+            final_invoice_path = self.update_wconcept_template(
+                template_path,
+                license_count,
+                license_cost,
+                collection_date,
+                bill_amount
+            )
             if final_invoice_path is None:
                 print("W컨셉 청구서 생성 실패")
                 return False

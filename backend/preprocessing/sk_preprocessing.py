@@ -148,7 +148,7 @@ class SKPreprocessor:
             print(f"Meta ICS 사용량 계산 실패: {e}")
             return None
     
-    def update_sk_template(self, template_path, amount_without_vat, collection_date, total_amount):
+    def update_sk_template(self, template_path, amount_without_vat, collection_date, total_amount, license_cost=80000):
         """skelectlink.xlsx 템플릿 파일 업데이트"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -217,6 +217,10 @@ class SKPreprocessor:
             # 3. 세부내역 시트 업데이트 - E4 셀에 부가세 제외 금액 입력 (쉼표 없이)
             if '세부내역' in workbook.sheetnames:
                 detail_sheet = workbook['세부내역']
+                # C32 셀에 라이선스 비용 입력 (요청사항)
+                detail_sheet.cell(row=32, column=3).value = license_cost
+                print(f" 세부내역 시트 C32 셀 업데이트: {license_cost}원")
+
                 # E4 셀에 부가세 제외 금액 입력 (쉼표 없이)
                 detail_sheet.cell(row=4, column=5).value = amount_without_vat
                 print(f" 세부내역 시트 E4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
@@ -282,10 +286,11 @@ class SKPreprocessor:
         except Exception as e:
             print(f"수식 참조 업데이트 오류: {e}")
     
-    def process_sk_data(self, collection_date):
+    def process_sk_data(self, collection_date, license_cost=80000):
         """SK일렉링크 데이터 전처리 메인 함수"""
         try:
             print(" SK일렉링크 데이터 전처리 시작")
+            print(f" SK일렉링크 라이선스 비용: {license_cost}원")
             
             # 1. 고지서 금액 조회
             total_amount = self.get_bill_amount("SK일렉링크")
@@ -306,7 +311,13 @@ class SKPreprocessor:
                 return False
             
             # 4. 템플릿 업데이트 및 청구서 생성
-            final_invoice_path = self.update_sk_template(template_path, amount_without_vat, collection_date, total_amount)
+            final_invoice_path = self.update_sk_template(
+                template_path,
+                amount_without_vat,
+                collection_date,
+                total_amount,
+                license_cost=license_cost
+            )
             if final_invoice_path is None:
                 print("SK일렉링크 청구서 생성 실패")
                 return False
