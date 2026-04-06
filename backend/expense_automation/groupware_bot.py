@@ -209,8 +209,27 @@ class GroupwareAutomation:
             
             # 1. 카드 사용내역 버튼 클릭
             print("  1) 카드 사용내역 버튼 클릭")
-            card_btn = self.wait.until(EC.element_to_be_clickable((By.ID, "btnExpendInterfaceCard")))
-            card_btn.click()
+            card_btn = None
+            card_button_selectors = [
+                (By.ID, "btnExpendInterfaceCard"),  # 기존 버튼
+                # 신규 버튼: 카드사용내역(취소분 포함)
+                (By.XPATH, "//button[contains(@onclick,'fnDefault_cardUseHistoryWithCancel')]"),
+                (By.XPATH, "//button[contains(normalize-space(.), '카드사용내역(취소분 포함)')]"),
+                (By.XPATH, "//button[contains(normalize-space(.), '카드사용내역')]"),
+            ]
+
+            for selector_type, selector_value in card_button_selectors:
+                try:
+                    card_btn = self.wait.until(EC.element_to_be_clickable((selector_type, selector_value)))
+                    print(f"    카드 사용내역 버튼 발견: {selector_type}, {selector_value}")
+                    break
+                except Exception:
+                    continue
+
+            if not card_btn:
+                raise Exception("카드 사용내역 버튼을 찾을 수 없습니다 (ID/onclick/text 셀렉터 모두 실패)")
+
+            self.driver.execute_script("arguments[0].click();", card_btn)
             time.sleep(3)
             
             # 2. 카드 선택 팝업 처리

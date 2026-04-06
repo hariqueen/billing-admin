@@ -155,7 +155,7 @@ function App() {
               }`}
             >
               <Settings className="w-5 h-5" />
-              계정 관리
+              설정
             </button>
             
             <button
@@ -247,7 +247,7 @@ function App() {
               }`}
             >
               <Settings className="w-5 h-5" />
-              계정 관리
+              설정
             </button>
             
             <button

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Eye, EyeOff, Save, ArrowLeft, Plus, Trash2, Pencil } from 'lucide-react';
 
 // API URL을 환경에 따라 자동으로 선택
 const API_URL = window.location.hostname === 'localhost' 
@@ -13,6 +13,14 @@ const AccountManager = ({ onBack }) => {
   const [showPasswords, setShowPasswords] = useState({});
   const [editingAccount, setEditingAccount] = useState(null);
   const [viewType, setViewType] = useState('project'); // 'project' 또는 'llm'
+  const [savedCeoName, setSavedCeoName] = useState('');
+  const [ceoDraft, setCeoDraft] = useState('');
+  const [ceoEditing, setCeoEditing] = useState(false);
+  const [savingCeo, setSavingCeo] = useState(false);
+  const ceoEditingRef = useRef(false);
+  useEffect(() => {
+    ceoEditingRef.current = ceoEditing;
+  }, [ceoEditing]);
   const [newAccount, setNewAccount] = useState({
     company_name: '',
     account_type: 'sms',
@@ -113,9 +121,63 @@ const AccountManager = ({ onBack }) => {
     }
   };
 
+  const fetchInvoiceCommonSettings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/invoice-common-settings`);
+      if (response.ok) {
+        const data = await response.json();
+        const v = data.ceo_name != null ? String(data.ceo_name) : '';
+        setSavedCeoName(v);
+        if (!ceoEditingRef.current) {
+          setCeoDraft(v);
+        }
+      }
+    } catch (error) {
+      console.error('청구서 공통 설정 로드 실패:', error);
+    }
+  };
+
   useEffect(() => {
     fetchAccounts();
+    fetchInvoiceCommonSettings();
   }, []);
+
+  const handleSaveInvoiceCommon = async () => {
+    setSavingCeo(true);
+    try {
+      const response = await fetch(`${API_URL}/api/invoice-common-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ceo_name: ceoDraft }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const v = data.ceo_name != null ? String(data.ceo_name) : '';
+        setSavedCeoName(v);
+        setCeoDraft(v);
+        setCeoEditing(false);
+        alert('청구서 공통 설정이 저장되었습니다.');
+      } else {
+        const err = await response.json().catch(() => ({}));
+        alert(err.error || '저장에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('저장 중 오류가 발생했습니다.');
+    } finally {
+      setSavingCeo(false);
+    }
+  };
+
+  const handleStartEditCeo = () => {
+    setCeoDraft(savedCeoName);
+    setCeoEditing(true);
+  };
+
+  const handleCancelEditCeo = () => {
+    setCeoDraft(savedCeoName);
+    setCeoEditing(false);
+  };
 
   // 비밀번호 표시/숨김 토글
   const togglePasswordVisibility = (accountId) => {
@@ -254,7 +316,7 @@ const AccountManager = ({ onBack }) => {
               <ArrowLeft className="w-5 h-5" />
               뒤로가기
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">계정 관리</h1>
+            <h1 className="text-2xl font-bold text-gray-900">설정</h1>
           </div>
           <button
             onClick={handleAddAccount}
@@ -265,11 +327,76 @@ const AccountManager = ({ onBack }) => {
           </button>
         </div>
 
-        {/* 계정 목록 */}
+        {/* 청구서 공통 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">청구서 공통</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            전처리 시 대외공문 시트 <span className="font-mono">D35</span>에 반영됩니다. 앞부분은 &quot;대표이사&quot; 고정 뒤 공백 3칸,
+            이어서 입력한 이름이 들어갑니다. 이름 안의 띄어쓰기도 그대로 반영됩니다.
+          </p>
+          <div className="max-w-2xl">
+            <label className="block text-sm font-medium text-gray-700 mb-1">대표이사 이름</label>
+            {!ceoEditing ? (
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <div className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-900 min-h-[42px] flex items-center">
+                  {savedCeoName.trim() ? (
+                    <span>{savedCeoName}</span>
+                  ) : (
+                    <span className="text-gray-400">등록된 대표이사명이 없습니다.</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleStartEditCeo}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-800 rounded-md hover:bg-gray-50 text-sm font-medium shrink-0"
+                >
+                  <Pencil className="w-4 h-4" />
+                  수정
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
+                <div className="flex-1 min-w-0">
+                  <input
+                    id="ceo-name-input"
+                    type="text"
+                    value={ceoDraft}
+                    onChange={(e) => setCeoDraft(e.target.value)}
+                    placeholder="예: 홍 길 동"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleSaveInvoiceCommon}
+                    disabled={savingCeo}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 disabled:opacity-50 text-sm font-medium"
+                  >
+                    <Save className="w-4 h-4" />
+                    {savingCeo ? '저장 중…' : '저장'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelEditCeo}
+                    disabled={savingCeo}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 계정 관리 */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">계정 관리</h2>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">등록된 계정 목록</h2>
+              <h3 className="text-sm font-medium text-gray-800">등록된 계정 목록</h3>
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-gray-700">보기 방식:</label>
                 <select

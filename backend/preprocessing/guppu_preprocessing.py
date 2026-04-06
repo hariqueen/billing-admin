@@ -10,6 +10,7 @@ from openpyxl.drawing.image import Image
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+from backend.preprocessing.invoice_common import apply_ceo_line_to_doc_sheet_d35
 
 class GuppuPreprocessor:
     def __init__(self):
@@ -368,6 +369,8 @@ class GuppuPreprocessor:
                 
                 # 하단 테이블 수식 업데이트 (B24, D24, D25)
                 self.update_formula_references(doc_sheet, year_month)
+            
+            apply_ceo_line_to_doc_sheet_d35(workbook)
             
             # 로고 이미지 삽입 (B2 셀)
             try:

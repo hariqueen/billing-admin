@@ -10,6 +10,7 @@ from openpyxl.drawing.image import Image
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+from backend.preprocessing.invoice_common import apply_ceo_line_to_doc_sheet_d35
 import calendar
 
 class AnhousPreprocessor:
@@ -199,9 +200,9 @@ class AnhousPreprocessor:
             if 'annhouse_CS' in base_name:
                 team_suffix = 'CS'
             elif 'annhouse_TS' in base_name:
-                team_suffix = 'TS'
+                team_suffix = 'MGC글로벌'
             elif base_name == 'annhouse.xlsx':
-                team_suffix = '창업'
+                team_suffix = '개발지원팀'
             else:
                 team_suffix = 'unknown'
             
@@ -360,8 +361,8 @@ class AnhousPreprocessor:
             
             # 팀별 행 범위 정의
             team_ranges = {
-                "창업": range(31, 39),  # 31-38행
-                "TS": range(31, 33),    # 31-32행  
+                "개발지원팀": range(31, 39),  # 31-38행
+                "MGC글로벌": range(31, 33),    # 31-32행
                 "CS": range(33, 36)     # 33-35행
             }
             
@@ -526,16 +527,16 @@ class AnhousPreprocessor:
             # 템플릿별 발신번호 매핑 (하이픈 제거된 형태로 비교)
             sender_mapping = {
                 "CS팀": "15888298",
-                "엔하우스": "15884611", 
-                "사업지원팀": "15880656"
+                "MGC글로벌": "15884611",
+                "개발지원팀": "15880656"
             }
             
             print(f"    발신번호 샘플: {success_df['발신번호_정리'].head(10).tolist()}")
             
             # 해당 템플릿의 발신번호로 필터링
             target_sender = sender_mapping.get(template_team)
-            if template_team == "사업지원팀":
-                # 사업지원팀의 경우 15880656 또는 NULL/빈값 모두 포함
+            if template_team == "개발지원팀":
+                # 개발지원팀의 경우 15880656 또는 NULL/빈값 모두 포함
                 team_sms_df = success_df[
                     (success_df['발신번호_정리'] == '15880656') | 
                     (success_df['발신번호'].isna()) | 
@@ -587,6 +588,8 @@ class AnhousPreprocessor:
                 print(f"    세부내역 시트 업데이트 완료 - D13:{counts['SMS']}, D14:{counts['LMS']}, D15:0, D16:{counts['TALK']}")
             else:
                 print("    세부내역 시트를 찾을 수 없습니다")
+            
+            apply_ceo_line_to_doc_sheet_d35(workbook)
                 
         except Exception as e:
             print(f" 세부내역 시트 업데이트 오류: {e}")
@@ -625,9 +628,9 @@ class AnhousPreprocessor:
                 if 'annhouse_CS' in template_name:
                     template_team = "CS팀"
                 elif 'annhouse_TS' in template_name:
-                    template_team = "엔하우스"
+                    template_team = "MGC글로벌"
                 elif template_name == 'annhouse.xlsx':
-                    template_team = "사업지원팀"
+                    template_team = "개발지원팀"
                 
                 print(f"   매칭된 팀: {template_team}")
                 print(f"   사용 가능한 팀: {list(team_data.keys())}")

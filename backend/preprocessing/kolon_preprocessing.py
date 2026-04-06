@@ -10,8 +10,10 @@ import shutil
 import firebase_admin
 from firebase_admin import credentials, storage, firestore
 from backend.utils.secrets_manager import get_firebase_secret
+from backend.preprocessing.invoice_common import apply_ceo_line_to_doc_sheet_d35
 import json
 import calendar
+
 
 class KolonPreprocessor:
     def __init__(self):
@@ -514,7 +516,7 @@ class KolonPreprocessor:
             print(f"Meta ICS 사용량 계산 실패: {e}")
             return None
     
-    def update_kolon_template(self, template_path, amount_without_vat, collection_date, total_amount):
+    def update_kolon_template(self, template_path, amount_without_vat, collection_date):
         """kolon.xlsx 템플릿 파일 업데이트"""
         try:
             date_obj = datetime.strptime(collection_date, '%Y-%m-%d')
@@ -531,13 +533,15 @@ class KolonPreprocessor:
             
             workbook = load_workbook(output_path)
             
-            # B9 셀에 문서번호 설정 (MMP-{년월} 형식)
+            # B9 셀에 문서번호 설정 (MMP-{년월} 형식) — 대외공문만. 세부내역 B9는 비워 둠(요청사항).
             document_number = f"MMP-{date_prefix}"
             for sheet in workbook.worksheets:
-                if '세부내역' in sheet.title or '대외공문' in sheet.title:
+                if '대외공문' in sheet.title:
                     sheet.cell(row=9, column=2).value = f"문서번호  : {document_number}"
                     print(f"{sheet.title} B9 셀에 문서번호 설정 완료: {document_number}")
-            
+            if '세부내역' in workbook.sheetnames:
+                workbook['세부내역'].cell(row=9, column=2).value = None
+
             # 1. 대외공문 시트 업데이트
             if '대외공문' in workbook.sheetnames:
                 doc_sheet = workbook['대외공문']
@@ -603,11 +607,7 @@ class KolonPreprocessor:
                 # E12 셀에 부가세 제외 금액 입력
                 detail_sheet.cell(row=12, column=5).value = amount_without_vat
                 print(f"세부내역 시트 E12 셀 업데이트: {amount_without_vat:,}원")
-                
-                # E15 셀에 총금액 비용 그대로 입력 (1.1 계산 전 총금액)
-                detail_sheet.cell(row=15, column=5).value = total_amount
-                print(f"세부내역 시트 E15 셀 업데이트: {total_amount:,}원 (총금액)")
-                
+
                 # Meta ICS 계산 및 업데이트
                 ics_data = self.calculate_meta_ics_usage(collection_date)
                 if ics_data:
@@ -616,6 +616,8 @@ class KolonPreprocessor:
                     print(f"세부내역 시트 E36 셀 업데이트: {ics_data['days_in_month']}일")
                     
                     print(f"Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
+            
+            apply_ceo_line_to_doc_sheet_d35(workbook)
             
             # 파일 저장
             workbook.save(output_path)
@@ -826,7 +828,7 @@ class KolonPreprocessor:
                         return False
                     
                     # 3.4. 템플릿 업데이트 및 청구서 생성
-                    final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date, total_amount)
+                    final_invoice_path = self.update_kolon_template(template_path, amount_without_vat, collection_date)
                     if final_invoice_path is None:
                         print("코오롱 청구서 생성 실패")
                         return False

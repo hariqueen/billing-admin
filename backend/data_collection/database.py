@@ -238,3 +238,44 @@ class DatabaseManager:
             'name': updated.get('name'),
             'position': updated.get('position')
         }
+
+    INVOICE_COMMON_DOC = ("billing_admin_settings", "invoice_common")
+
+    def get_invoice_common_settings_firestore(self):
+        """Firestore에 백업된 청구서 공통 설정(대표이사명). 없으면 None."""
+        if self.db is None:
+            return None
+        try:
+            coll, doc_id = self.INVOICE_COMMON_DOC
+            doc = self.db.collection(coll).document(doc_id).get()
+            if not doc.exists:
+                return None
+            d = doc.to_dict() or {}
+            ceo = d.get("ceo_name")
+            return {
+                "ceo_name": "" if ceo is None else str(ceo),
+                "updated_at": d.get("updated_at"),
+            }
+        except Exception as e:
+            print(f"⚠️ Firestore 청구서 공통 설정 조회 실패: {e}")
+            return None
+
+    def save_invoice_common_settings_firestore(self, ceo_name):
+        """청구서 공통(대표이사명) Firestore 백업 — 로컬 초기화·볼륨 유실 시 복구용."""
+        if self.db is None:
+            return False
+        try:
+            coll, doc_id = self.INVOICE_COMMON_DOC
+            val = ceo_name if isinstance(ceo_name, str) else str(ceo_name)
+            self.db.collection(coll).document(doc_id).set(
+                {
+                    "ceo_name": val,
+                    "updated_at": firestore.SERVER_TIMESTAMP,
+                },
+                merge=True,
+            )
+            print("✅ 청구서 공통 설정 Firestore 백업 완료")
+            return True
+        except Exception as e:
+            print(f"⚠️ Firestore 청구서 공통 설정 저장 실패: {e}")
+            return False

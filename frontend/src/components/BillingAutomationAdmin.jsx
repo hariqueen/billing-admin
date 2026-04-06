@@ -327,9 +327,14 @@ const BillingAutomationAdmin = ({ user, onLogout, onShowAccountManager }) => {
           if (typeof entry !== 'string') return;
           if (
             entry.includes('❌') ||
+            entry.includes('⚠️') ||
             entry.includes('로그인 실패') ||
             entry.includes('수집 중 오류') ||
-            entry.includes('심각한 오류')
+            entry.includes('심각한 오류') ||
+            entry.includes('수집 실패') ||
+            entry.includes('다운로드 실패') ||
+            entry.includes('타임아웃') ||
+            entry.includes('검증 실패')
           ) {
             messages.push(entry);
           }

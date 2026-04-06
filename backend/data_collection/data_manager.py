@@ -485,6 +485,61 @@ class DataManager:
             pass
         return False
 
+    def _snapshot_download_dir(self, download_dir):
+        """다운로드 폴더 파일명 집합과 mtime 스냅샷(덮어쓰기 감지용)."""
+        names = set()
+        mtimes = {}
+        if not os.path.exists(download_dir):
+            return names, mtimes
+        for n in os.listdir(download_dir):
+            p = os.path.join(download_dir, n)
+            if os.path.isfile(p):
+                names.add(n)
+                try:
+                    mtimes[n] = os.path.getmtime(p)
+                except OSError:
+                    pass
+        return names, mtimes
+
+    def _wait_for_excel_in_download_dir(self, download_dir, before_names, before_mtimes, max_wait_sec=90):
+        """
+        엑셀 다운로드 완료까지 대기.
+        - 신규 파일명
+        - 동일 파일명 덮어쓰기(mtime 갱신)
+        - Chrome .crdownload 진행 중이면 소멸까지 대기
+        """
+        interval = 2
+        elapsed = 0
+        while elapsed < max_wait_sec:
+            time.sleep(interval)
+            elapsed += interval
+            if not os.path.exists(download_dir):
+                continue
+            listing = os.listdir(download_dir)
+            if any(x.endswith(".crdownload") for x in listing):
+                print(f"SMS 다운로드 대기 (.crdownload, {elapsed}/{max_wait_sec}초)")
+                continue
+            for n in listing:
+                low = n.lower()
+                if not (low.endswith(".xlsx") or low.endswith(".xls")):
+                    continue
+                p = os.path.join(download_dir, n)
+                if not os.path.isfile(p):
+                    continue
+                try:
+                    m = os.path.getmtime(p)
+                except OSError:
+                    continue
+                if n not in before_names:
+                    print(f"SMS 엑셀 다운로드 감지(신규): {n}")
+                    return True
+                old = before_mtimes.get(n)
+                if old is not None and m > old + 1.0:
+                    print(f"SMS 엑셀 다운로드 감지(갱신): {n}")
+                    return True
+        print(f"⚠️ SMS 다운로드 폴더에서 엑셀 확인 시간 초과 ({max_wait_sec}초)")
+        return False
+
     def _process_sms_data(self, driver, config, start_date=None, end_date=None, brand=None, is_last_brand=False):
         """SMS 데이터 처리 (검색 및 다운로드) - 간소화 버전"""
         wait = WebDriverWait(driver, 15)
@@ -526,33 +581,50 @@ class DataManager:
                 except Exception as date_error:
                     print(f"❌ 날짜 설정 실패: {str(date_error)[:100]}")
         
-        # 조회 버튼 클릭
+        # 조회 버튼 클릭 (마스크를 억지로 숨기지 않음 → 조회 후 그리드/로딩이 정상 동작)
         search_btn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'button[data-page-btn="search"], button[btnid="B0002"]')))
         driver.execute_script("""
             var btn = arguments[0];
             btn.scrollIntoView({block: 'center'});
-            document.querySelectorAll('.loading-mask, .loading-overlay, .ax-mask-body').forEach(function(el) { el.style.display = 'none'; });
             btn.click();
         """, search_btn)
-        time.sleep(3)
-        
-        # 데이터 없음 알림 처리
+        time.sleep(1)
         try:
-            alert = WebDriverWait(driver, 2).until(
-                EC.visibility_of_element_located((By.CSS_SELECTOR, "#ax5-dialog-29 .ax-dialog-msg"))
-            )
-            if "검색된 데이터가 없습니다" in alert.text:
-                print("⚠️ 검색된 데이터가 없습니다")
-                if not is_last_brand:
+            self._wait_for_masks(driver, timeout=45)
+        except Exception:
+            pass
+        time.sleep(1)
+        
+        # 데이터 없음 알림 (늦게 뜨는 경우 대비해 최대 12초까지 폴링; 데이터가 있으면 다이얼로그 없이 곧바로 통과)
+        no_data_deadline = time.time() + 12
+        while time.time() < no_data_deadline:
+            try:
+                msg_el = driver.find_element(By.CSS_SELECTOR, "#ax5-dialog-29 .ax-dialog-msg")
+                if not msg_el.is_displayed():
+                    time.sleep(0.35)
+                    continue
+                text = (msg_el.text or "").strip()
+                if "검색된 데이터가 없습니다" in text:
+                    print("⚠️ 검색된 데이터가 없습니다")
+                    try:
+                        driver.find_element(By.CSS_SELECTOR, "#ax5-dialog-29 button[data-dialog-btn='ok']").click()
+                    except Exception:
+                        pass
+                    return False
+                try:
                     driver.find_element(By.CSS_SELECTOR, "#ax5-dialog-29 button[data-dialog-btn='ok']").click()
-                return False
-        except:
-            pass  # 알림창이 없으면 계속 진행
+                    time.sleep(0.4)
+                except Exception:
+                    pass
+                break
+            except Exception:
+                time.sleep(0.35)
+        time.sleep(0.3)
         
         # 엑셀 다운로드
         download_dir = "/app/downloads"
         os.makedirs(download_dir, exist_ok=True)
-        before_files = set(os.listdir(download_dir)) if os.path.exists(download_dir) else set()
+        before_names, before_mtimes = self._snapshot_download_dir(download_dir)
         
         download_btn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'button[data-page-btn="excel"], button[btnid="B0004"], #titleBtn > button:nth-child(1)')))
         driver.execute_script("""
@@ -561,31 +633,17 @@ class DataManager:
             document.querySelectorAll('.loading-mask, .loading-overlay, .ax-mask-body').forEach(function(el) { el.style.display = 'none'; });
             btn.click();
         """, download_btn)
-        time.sleep(5)
-        
-        # 다운로드 완료 후 파일 확인
         try:
-            time.sleep(5)
-            after_files = set(os.listdir(download_dir)) if os.path.exists(download_dir) else set()
-            new_files = after_files - before_files
-            new_excel_files = [f for f in new_files if f.endswith(('.xlsx', '.xls'))]
-            
-            if new_excel_files:
-                return True
-            
-            # 기존 Excel 파일이 최근에 수정되었는지 확인
-            all_excel_files = [f for f in after_files if f.endswith(('.xlsx', '.xls'))]
-            if all_excel_files:
-                current_time = time.time()
-                for excel_file in all_excel_files:
-                    file_path = os.path.join(download_dir, excel_file)
-                    if os.path.exists(file_path) and current_time - os.path.getmtime(file_path) < 10:
-                        return True
-            
-            return False
-        except Exception as e:
-            print(f"⚠️ 파일 확인 중 오류: {e}")
-            return False
+            self._wait_for_masks(driver, timeout=20)
+        except Exception:
+            pass
+        
+        ok = self._wait_for_excel_in_download_dir(
+            download_dir, before_names, before_mtimes, max_wait_sec=90
+        )
+        if not ok:
+            print("⚠️ SMS 엑셀 다운로드 검증 실패 또는 타임아웃")
+        return ok
 
     def process_chat_no_brand(self, driver, config, start_date, end_date):
         wait = WebDriverWait(driver, 10)
@@ -1067,7 +1125,11 @@ class DataManager:
             os.makedirs(download_dir, exist_ok=True)
             before_files = set(os.listdir(download_dir)) if os.path.exists(download_dir) else set()
             print(f"{debug_prefix} 다운로드 전 파일 수: {len(before_files)}")
-            
+            try:
+                self.login_manager._apply_chrome_download_path_cdp(driver)
+            except Exception as cdp_e:
+                print(f"{debug_prefix} CDP 다운로드 경로 재적용(무시 가능): {cdp_e}")
+
             # 다운로드 버튼 클릭
             print(f"{debug_prefix} 다운로드 버튼 클릭 시도: {config['download_btn_selector']}")
             download_btn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, config['download_btn_selector'])))
@@ -1078,16 +1140,64 @@ class DataManager:
                 btn.click();
             """, download_btn)
             print(f"{debug_prefix} 다운로드 버튼 클릭 성공")
-            time.sleep(5)
-            
+            # 폴더가 비어 있으면 .crdownload 도 없어 이전 로직이 즉시 종료됨 → 최대 90초까지 폴링.
+            # Chrome은 동일 파일명 덮어쓰기 시 신규 파일명이 없을 수 있음 → mtime 도 함께 판정.
+            deadline = time.time() + 90
+            saw_download_activity = False
+            while time.time() < deadline:
+                try:
+                    names = os.listdir(download_dir)
+                except OSError:
+                    time.sleep(0.3)
+                    continue
+                if any(n.endswith(".crdownload") for n in names):
+                    saw_download_activity = True
+                    time.sleep(0.35)
+                    continue
+                after_set = set(names)
+                if after_set - before_files:
+                    saw_download_activity = True
+                    break
+                now = time.time()
+                for fname in names:
+                    if not fname.endswith((".xlsx", ".xls")):
+                        continue
+                    fp = os.path.join(download_dir, fname)
+                    try:
+                        if now - os.path.getmtime(fp) < 90:
+                            saw_download_activity = True
+                            break
+                    except OSError:
+                        pass
+                if saw_download_activity:
+                    break
+                time.sleep(0.45)
+            else:
+                print(f"{debug_prefix} 경고: 다운로드 대기 90초 초과")
+
             after_files = set(os.listdir(download_dir))
             new_files = after_files - before_files
-            
-            if new_files:
-                print(f"{debug_prefix} 엑셀 다운로드 완료: {list(new_files)}")
+            new_excel = [f for f in new_files if f.endswith((".xlsx", ".xls"))]
+            if new_excel:
+                print(f"{debug_prefix} 엑셀 다운로드 완료(신규 파일): {new_excel}")
                 return True
-            else:
-                raise RuntimeError("GUPPU_DOWNLOAD_FAIL: 다운로드된 파일을 찾을 수 없습니다")
+
+            all_excel = [f for f in after_files if f.endswith((".xlsx", ".xls"))]
+            now = time.time()
+            for fname in all_excel:
+                fp = os.path.join(download_dir, fname)
+                try:
+                    if now - os.path.getmtime(fp) < 45:
+                        print(f"{debug_prefix} 엑셀 다운로드 완료(동일 이름 덮어쓰기, 최근 수정): {fname}")
+                        return True
+                except OSError:
+                    continue
+
+            print(
+                f"{debug_prefix} 다운로드 폴더 상태: "
+                f"{sorted(after_files)[:20]}{'...' if len(after_files) > 20 else ''}"
+            )
+            raise RuntimeError("GUPPU_DOWNLOAD_FAIL: 다운로드된 파일을 찾을 수 없습니다")
                 
         except Exception as e:
             print(f"{debug_prefix} 구쁘 SMS 데이터 처리 실패: {e}")

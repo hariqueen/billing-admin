@@ -8,6 +8,7 @@ import re
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+from backend.preprocessing.invoice_common import apply_ceo_line_to_doc_sheet_d35
 import calendar
 
 class SKPreprocessor:
@@ -237,6 +238,8 @@ class SKPreprocessor:
                     print(f"세부내역 시트 E38 셀 업데이트: {ics_data['days_in_month']}일")
                     
                     print(f"Meta ICS 계산 완료: {ics_data['days_in_month']}일 기준")
+            
+            apply_ceo_line_to_doc_sheet_d35(workbook)
             
             # 로고 이미지 삽입 (B2 셀)
             try:

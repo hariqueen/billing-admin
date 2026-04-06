@@ -9,6 +9,7 @@ from openpyxl.drawing.image import Image
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+from backend.preprocessing.invoice_common import apply_ceo_line_to_doc_sheet_d35
 
 class DecidersPreprocessor:
     def __init__(self):
@@ -315,6 +316,8 @@ class DecidersPreprocessor:
                     print(f"{invoice_type} 카카오 채팅 카운트 입력 - D14: {chat_count}건")
                 
                 print(f"{invoice_type} 카운트 입력 - SMS:{counts['SMS']}, LMS:{counts['LMS']}, MMS:{counts['MMS']}, TALK:{counts['TALK']}")
+            
+            apply_ceo_line_to_doc_sheet_d35(workbook)
             
             # 로고 이미지 삽입 (B2 셀)
             try:

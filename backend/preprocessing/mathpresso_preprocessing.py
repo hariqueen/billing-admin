@@ -9,6 +9,7 @@ import re
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+from backend.preprocessing.invoice_common import apply_ceo_line_to_doc_sheet_d35
 
 class MathpressoPreprocessor:
     def __init__(self):
@@ -279,6 +280,8 @@ class MathpressoPreprocessor:
                 # F4 셀에 부가세 제외 금액 입력 (숫자만)
                 detail_sheet.cell(row=4, column=6).value = amount_without_vat
                 print(f"세부내역 시트 F4 셀 업데이트: {amount_without_vat}원 (쉼표 없이)")
+            
+            apply_ceo_line_to_doc_sheet_d35(workbook)
             
             # 로고 이미지 삽입 (B2 셀)
             try:

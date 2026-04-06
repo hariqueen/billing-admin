@@ -15,6 +15,22 @@ class LoginManager:
         # Docker 컨테이너 내부에서 사용할 다운로드 경로
         self.download_dir = "/app/downloads"
         os.makedirs(self.download_dir, exist_ok=True)
+
+    def _apply_chrome_download_path_cdp(self, driver):
+        """Headless Chrome은 prefs만으로는 다운로드 폴더에 저장되지 않는 경우가 많아 CDP로 허용 경로를 지정한다."""
+        path = os.path.abspath(self.download_dir)
+        last_err = None
+        for cmd, payload in (
+            ("Browser.setDownloadBehavior", {"behavior": "allow", "downloadPath": path}),
+            ("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": path}),
+        ):
+            try:
+                driver.execute_cdp_cmd(cmd, payload)
+                print(f"✅ Chrome CDP 다운로드 경로 설정: {cmd} → {path}")
+                return
+            except Exception as e:
+                last_err = e
+        print(f"⚠️ Chrome CDP 다운로드 경로 설정 실패(다운로드가 안 될 수 있음): {last_err}")
     
     def login_account(self, account_data, keep_session=False):
         """계정 로그인"""
@@ -41,7 +57,8 @@ class LoginManager:
                 "download.default_directory": self.download_dir,
                 "download.prompt_for_download": False,
                 "download.directory_upgrade": True,
-                "safebrowsing.enabled": True
+                "safebrowsing.enabled": True,
+                "profile.default_content_setting_values.automatic_downloads": 1,
             }
             chrome_options.add_experimental_option("prefs", prefs)
         except Exception as opt_error:
@@ -55,6 +72,7 @@ class LoginManager:
             service = Service(log_output="/tmp/chromedriver.log")
             driver = webdriver.Chrome(service=service, options=chrome_options)
             driver.maximize_window()
+            self._apply_chrome_download_path_cdp(driver)
         except Exception as driver_error:
             print(f"❌ Chrome WebDriver 생성 실패: {driver_error}")
             import traceback
@@ -190,7 +208,14 @@ class LoginManager:
             # 구쁘 전용 로그인 검증
             if company_name == "구쁘":
                 current_url_lower = current_url.lower()
-                still_login_url = any(token in current_url_lower for token in ["/login", "login/form", "/signin", "/auth/login"])
+                guppu_success_paths = ("/login/success", "/login/complete")
+                if any(p in current_url_lower for p in guppu_success_paths):
+                    still_login_url = False
+                else:
+                    still_login_url = any(
+                        token in current_url_lower
+                        for token in ["/login", "login/form", "/signin", "/auth/login"]
+                    )
                 login_btn_selector = config.get('login_btn', '#loginBtn')
                 login_btn_still_visible = False
                 try:

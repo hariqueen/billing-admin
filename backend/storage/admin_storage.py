@@ -95,6 +95,12 @@ class AdminStorage:
                         "updated_at": None
                     }
                     needs_update = True
+                if "invoice_common_settings" not in data:
+                    data["invoice_common_settings"] = {
+                        "ceo_name": "",
+                        "updated_at": None
+                    }
+                    needs_update = True
                 
                 if needs_update:
                     self.save_data_direct(data)
@@ -300,7 +306,16 @@ class AdminStorage:
             print(f"{company_name} 청구서 결과 초기화")
     
     def clear_all(self):
-        """모든 데이터 초기화 (bill_amounts와 processed_files 모두 비우기)"""
+        """모든 데이터 초기화. 청구서 공통(대표이사명)은 유지 — 전체 초기화로 사라지지 않게 함."""
+        existing = self.load_data()
+        inv = existing.get("invoice_common_settings")
+        if not isinstance(inv, dict):
+            inv = {}
+        invoice_common_settings = {
+            "ceo_name": str(inv.get("ceo_name") or ""),
+            "updated_at": inv.get("updated_at"),
+        }
+
         default_data = {
             "bill_amounts": {},
             "processed_files": {},
@@ -314,10 +329,11 @@ class AdminStorage:
             "sk_settings": {
                 "license_cost": 80000,
                 "updated_at": None
-            }
+            },
+            "invoice_common_settings": invoice_common_settings,
         }
         self.save_data_direct(default_data)
-        print("admin_storage.json 전체 초기화 완료")
+        print("admin_storage.json 전체 초기화 완료 (대표이사명/청구서 공통 설정 유지)")
     
     # === 업로드된 파일 관련 메서드 ===
     
@@ -404,6 +420,31 @@ class AdminStorage:
 
         self.save_data_direct(data)
         print(f"SK일렉링크 설정 저장: license_cost={current.get('license_cost')}")
+
+    def get_invoice_common_settings(self):
+        """청구서 공통 설정(대표이사명 등)"""
+        data = self.load_data()
+        s = data.get("invoice_common_settings") or {}
+        ceo = s.get("ceo_name")
+        if ceo is None:
+            ceo = ""
+        else:
+            ceo = str(ceo)
+        return {
+            "ceo_name": ceo,
+            "updated_at": s.get("updated_at")
+        }
+
+    def save_invoice_common_settings(self, ceo_name=None):
+        data = self.load_data()
+        if "invoice_common_settings" not in data:
+            data["invoice_common_settings"] = {}
+        cur = data["invoice_common_settings"]
+        if ceo_name is not None:
+            cur["ceo_name"] = ceo_name if isinstance(ceo_name, str) else str(ceo_name)
+        cur["updated_at"] = datetime.now().isoformat()
+        self.save_data_direct(data)
+        print(f"청구서 공통 설정 저장: ceo_name={cur.get('ceo_name')!r}")
     
     # === 마이그레이션 메서드 ===
     

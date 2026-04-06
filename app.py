@@ -323,7 +323,10 @@ def collect_data():
                                 task_status[task_id]["log"].append(f"✅ SMS 파일 수집 완료: {latest_file}")
                     
                     if not sms_result:
-                        task_status[task_id]["log"].append("⚠️ SMS 데이터 수집 실패")
+                        sms_error_msg = f"{company_name} SMS 데이터 수집 실패 (다운로드 검증 실패 또는 타임아웃)"
+                        task_status[task_id]["log"].append(f"❌ {sms_error_msg}")
+                        # 부분 성공(CALL만 성공)이어도 프론트에서 오류 팝업을 띄울 수 있도록 error를 남긴다.
+                        task_status[task_id]["error"] = sms_error_msg
                     
                     # 디싸이더스/애드프로젝트인 경우 CHAT 데이터도 수집
                     if company_name == "디싸이더스/애드프로젝트":
@@ -866,24 +869,32 @@ def process_file():
                 # 다음 실행 시 기본값으로 보이도록 마지막 사용값 저장
                 admin_storage.save_sk_settings(license_cost=license_cost)
 
-                # 다운로드 폴더에서 생성된 파일명 찾기
-                download_dir = "/app/downloads"
-                os.makedirs(download_dir, exist_ok=True)
+                # SK 전처리 출력은 temp_processing에 생성됨(sk_preprocessing.py).
+                # 앤하우스 등은 /app/downloads만 쓰지만, 코오롱과 동일하게 두 경로를 스캔한다.
+                search_dirs = ["/app/downloads", "temp_processing"]
                 processed_files = []
-                
-                if os.path.exists(download_dir):
-                    import time
-                    current_time = time.time()
-                    all_files = os.listdir(download_dir)
-                    
-                    for filename in all_files:
-                        # SK일렉링크 청구내역서 파일 찾기
+
+                import time
+                current_time = time.time()
+
+                for search_dir in search_dirs:
+                    if not os.path.exists(search_dir):
+                        continue
+                    for filename in os.listdir(search_dir):
                         if ("SK일렉링크" in filename and "청구내역서" in filename and filename.endswith(".xlsx")):
-                            file_path = os.path.join(download_dir, filename)
-                            # 최근 5분 이내에 생성된 파일만 포함
+                            file_path = os.path.join(search_dir, filename)
                             if os.path.exists(file_path) and (current_time - os.path.getctime(file_path)) < 300:
-                                processed_files.append(filename)
-                
+                                processed_files.append((filename, os.path.getctime(file_path)))
+
+                if processed_files:
+                    latest_by_name = {}
+                    for fname, ctime in processed_files:
+                        if fname not in latest_by_name or ctime > latest_by_name[fname]:
+                            latest_by_name[fname] = ctime
+                    processed_files = sorted(latest_by_name.keys(), key=lambda f: latest_by_name[f], reverse=True)
+                else:
+                    processed_files = []
+
                 # 결과 저장
                 save_processed_files(company_name, processed_files)
                 
@@ -1116,6 +1127,32 @@ def get_sk_settings():
         return jsonify(settings)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/invoice-common-settings', methods=['GET', 'PUT'])
+def invoice_common_settings():
+    """청구서 공통 설정(세부내역 D35 대표이사명 등). 저장 시 Firestore에도 백업."""
+    try:
+        if request.method == 'GET':
+            local = admin_storage.get_invoice_common_settings()
+            if not (local.get("ceo_name") or "").strip():
+                remote = db_manager.get_invoice_common_settings_firestore()
+                if remote and (remote.get("ceo_name") or "").strip():
+                    admin_storage.save_invoice_common_settings(ceo_name=remote["ceo_name"])
+                    local = admin_storage.get_invoice_common_settings()
+            return jsonify(local)
+        data = request.get_json() or {}
+        if 'ceo_name' not in data:
+            return jsonify({"error": "ceo_name 필드가 필요합니다"}), 400
+        ceo_name = data.get('ceo_name')
+        if ceo_name is not None and not isinstance(ceo_name, str):
+            ceo_name = str(ceo_name)
+        admin_storage.save_invoice_common_settings(ceo_name=ceo_name)
+        db_manager.save_invoice_common_settings_firestore(ceo_name)
+        return jsonify({"success": True, **admin_storage.get_invoice_common_settings()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/save-uploaded-files', methods=['POST'])
 def save_uploaded_files():
@@ -1475,13 +1512,17 @@ def expense_automation():
 
 @app.route('/api/reset', methods=['POST'])
 def reset_data():
-    """초기화: temp_processing, bill_images 디렉토리 비우기 및 admin_storage.json 초기화"""
+    """초기화: temp_processing·bill_images 임시 파일 삭제, admin_storage는 금액·처리 결과 등만 비움(대표이사명 유지)."""
     try:
-        # 디렉토리 비우기 헬퍼 함수
-        def clear_directory(dir_path):
+        # 디렉토리 비우기 헬퍼 함수 (admin_storage.json은 유지 — 삭제 시 대표이사명 등이 통째로 사라짐)
+        def clear_directory(dir_path, exclude_filenames=None):
             """디렉토리 내 모든 파일 삭제"""
+            if exclude_filenames is None:
+                exclude_filenames = set()
             if os.path.exists(dir_path):
                 for filename in os.listdir(dir_path):
+                    if filename in exclude_filenames:
+                        continue
                     file_path = os.path.join(dir_path, filename)
                     try:
                         if os.path.isfile(file_path):
@@ -1489,11 +1530,11 @@ def reset_data():
                     except Exception as e:
                         print(f"파일 삭제 실패: {file_path}, 오류: {e}")
         
-        # 1. 디렉토리들 비우기
-        clear_directory("temp_processing")
+        # 1. 디렉토리들 비우기 (어드민 JSON은 남기고 clear_all로 내용만 정리)
+        clear_directory("temp_processing", exclude_filenames={"admin_storage.json"})
         clear_directory("bill_images")
         
-        # 2. admin_storage.json 초기화
+        # 2. admin_storage.json 초기화 (청구서 공통/대표이사명은 유지, Firestore 백업과도 일치)
         admin_storage.clear_all()
         
         return jsonify({

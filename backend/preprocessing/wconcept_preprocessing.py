@@ -8,6 +8,7 @@ from openpyxl.drawing.image import Image
 import firebase_admin
 from firebase_admin import credentials, storage
 from backend.utils.secrets_manager import get_firebase_secret
+from backend.preprocessing.invoice_common import apply_ceo_line_to_doc_sheet_d35
 
 class WconceptPreprocessor:
     def __init__(self):
@@ -167,6 +168,8 @@ class WconceptPreprocessor:
                         # E21 셀에 실제 고지서 청구비용 그대로 입력
                         detail_sheet.cell(row=21, column=5).value = total_amount
                         print(f"세부내역 시트 E21 셀 업데이트: {total_amount:,}원 (실제 고지서 청구비용)")
+            
+            apply_ceo_line_to_doc_sheet_d35(workbook)
             
             # 로고 이미지 삽입 (B2 셀)
             try:
